@@ -79,6 +79,7 @@ import { Ellipsoid, Geodetic, radians } from "@takram/three-geospatial";
 import { DialRoot, useDialKitController, type DialConfig } from "dialkit";
 import "dialkit/styles.css";
 import WispsCanvas from "./clouds-wisps";
+import CloudsMotif, { MOTIF_MOODS } from "./clouds-motif";
 import {
   SKY_PRESETS,
   ease,
@@ -404,6 +405,13 @@ export default function CloudsScene() {
         options: ["Live", ...Object.keys(SKY_PRESETS)],
         default: initialSky,
       },
+      // The motif face floating mid-sky (clouds-motif.tsx) — five baked
+      // expressions from the motif+signal_simulation study.
+      mood: {
+        type: "select",
+        options: [...MOTIF_MOODS],
+        default: "Content",
+      },
       speed: [2, 0, 10, 0.1],
       fullness: [0.35, 0, 1, 0.01],
       intensity: [0.5, 0, 1, 0.01],
@@ -469,6 +477,7 @@ export default function CloudsScene() {
           <Scene dials={values} />
         </Canvas>
       )}
+      <CloudsMotif mood={values.mood} />
       <DialRoot position="top-right" theme="dark" productionEnabled />
     </div>
   );

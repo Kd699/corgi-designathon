@@ -158,6 +158,8 @@ export function paletteForHour(hour: number, out: SkyPalette) {
 export interface CloudDials {
   engine: "Volumetric" | "Wisps";
   sky: "Live" | SkyPresetName;
+  /** The motif face's expression (clouds-motif.tsx). */
+  mood: "Content" | "Excited" | "Tense" | "Weary" | "Asleep";
   speed: number;
   fullness: number;
   intensity: number;
