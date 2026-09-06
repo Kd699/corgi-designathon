@@ -2,18 +2,20 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import DailyOpenLab from './pages/DailyOpenLab';
-import Shell, { SHELL_TABS } from './pages/Shell';
+import Shell, { tabForHash } from './pages/Shell';
+import InterventionPage from './pages/intervention/InterventionPage';
 import CloudsPage from './pages/clouds/page';
 import WidgetsPage from './pages/widgets/page';
 import MoodsPage from './pages/moods/page';
 import { AgentationSidePanelBridge } from './dev/agentation-side-panel-bridge';
 import './index.css';
 
-/* Hash routing, because two surfaces do not justify a router.
+/* Hash routing, because a handful of surfaces do not justify a router.
  *
- * The concept lab is the landing page: that is the thing being reviewed, and it owns the
- * hash itself (#m=…&s=…&p=…&v=… selects a mode/state/platform/view), so a link someone
- * pastes into Slack opens on the exact frame they meant. `#/app` is the escape hatch to
+ * The landing page is the two-tab shell (Intervention / Logging) — that is the thing being
+ * shipped. The concept board still owns every #m=… hash (mode/state/platform/view), so a
+ * frame link someone pasted into Slack opens exactly where it did; `#/board` is not needed,
+ * any #m= link is the board. `#/app` is the escape hatch to
  * the bare environment — the same components, no board around them. `/clouds` (and
  * `#/clouds`) is the sky brought over from next-personal.
  *
@@ -49,10 +51,14 @@ function Root() {
   if (isClouds(loc.path, loc.hash)) return <CloudsPage />;
   if (isWidgets(loc.path, loc.hash)) return <WidgetsPage />;
   if (isMoods(loc.path, loc.hash)) return <MoodsPage />;
-  // The two paradigms share a shell; each tab owns its hash (#/day, #/intervention).
-  const tab = SHELL_TABS.find((t) => loc.hash.startsWith(t.hash));
+  // The concept board owns the #m=… hashes; everything else that isn't a named route is the
+  // two-tab shell, which is also the landing page.
+  if (loc.hash.startsWith('#m=')) return <DailyOpenLab />;
+  if (loc.hash.startsWith('#/app')) return <App />;
+  if (loc.hash.startsWith('#/cbt')) return <InterventionPage />;
+  const tab = tabForHash(loc.hash);
   if (tab) return <Shell tabId={tab.id} />;
-  return loc.hash.startsWith('#/app') ? <App /> : <DailyOpenLab />;
+  return <DailyOpenLab />;
 }
 
 /* AgentationSidePanelBridge is the review surface: drop a comment on any element and it

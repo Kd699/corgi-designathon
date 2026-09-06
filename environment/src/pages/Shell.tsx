@@ -1,17 +1,17 @@
-/* The two paradigms, under one set of tabs.
+/* The final page: two tabs.
  *
- * They are not two features — they are two answers to the same question, and the tab pair is
- * the argument: Display is where you report your state and the board fills in around it;
- * Intervention is where the environment acts on you while you are still talking. Putting
- * them side by side is what makes the difference legible.
+ * Intervention is Kyler's /clouds voice session — you talk, the sky and the motif answer
+ * while you are still speaking. Logging is the dayboard — you report the day and the widgets
+ * fill in around it. Two answers to the same question, side by side; the tab pair is the
+ * argument.
  *
- * Each tab owns a hash, so either one is linkable and the browser's back button works. The
- * tab list is data — adding a third paradigm is one entry, and nothing here knows which tab
- * it is rendering.
+ * Each tab owns a hash so either is linkable and back works. `#/day` still lands on Logging
+ * because that link is already in circulation. The tab list is data: a third paradigm is one
+ * entry, and nothing here knows which tab it is rendering.
  */
 import type { ReactNode } from 'react';
 import DayboardPage from './DayboardPage';
-import InterventionPage from './intervention/InterventionPage';
+import CloudsPage from './clouds/page';
 import './shell.css';
 
 export interface ShellTab {
@@ -20,25 +20,34 @@ export interface ShellTab {
   /** What the tab is for, in one line — the paradigms are easy to confuse from the outside. */
   blurb: string;
   hash: string;
+  /** Older hashes that should land here too. */
+  aliases?: string[];
   render: () => ReactNode;
 }
 
 export const SHELL_TABS: ShellTab[] = [
   {
-    id: 'display',
-    label: 'Display',
-    blurb: 'report your state, the board fills in',
-    hash: '#/day',
-    render: () => <DayboardPage />,
-  },
-  {
     id: 'intervention',
     label: 'Intervention',
-    blurb: 'a CBT protocol that answers while you speak',
+    blurb: 'talk — the sky and the face answer as you go',
     hash: '#/intervention',
-    render: () => <InterventionPage />,
+    render: () => <CloudsPage />,
+  },
+  {
+    id: 'logging',
+    label: 'Logging',
+    blurb: 'report the day, the board fills in',
+    hash: '#/logging',
+    aliases: ['#/day'],
+    render: () => <DayboardPage />,
   },
 ];
+
+/** The tab a hash belongs to, or null. An empty hash is the first tab — the landing page. */
+export function tabForHash(hash: string): ShellTab | null {
+  if (!hash || hash === '#' || hash === '#/') return SHELL_TABS[0];
+  return SHELL_TABS.find((t) => hash.startsWith(t.hash) || t.aliases?.some((a) => hash.startsWith(a))) ?? null;
+}
 
 export default function Shell({ tabId }: { tabId: string }) {
   const active = SHELL_TABS.find((t) => t.id === tabId) ?? SHELL_TABS[0];
