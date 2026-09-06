@@ -113,6 +113,7 @@ export default function CloudsMotif({
   mood,
   summary,
   invert = false,
+  smile = false,
 }: {
   mood: MotifMood;
   /** The read behind the mood (clouds-signals.ts) — signal citations
@@ -122,6 +123,8 @@ export default function CloudsMotif({
    *  inverted, the body is the sky in NEGATIVE (backdrop-filter clipped to
    *  the blob) and the face is drawn in white on top. */
   invert?: boolean;
+  /** The mouth is off the face for now — this dial brings it back. */
+  smile?: boolean;
 }) {
   const face = SPECS[mood] ?? SPECS.Content;
   const blob = blobPath(face.pleasant, face.energy);
@@ -181,11 +184,13 @@ export default function CloudsMotif({
             <g className="cm-blink"><rect className="cm-eye" x="58.5" y={44 - face.eyeHeight / 2} width="11" height={face.eyeHeight} rx="5.5" /></g>
           </g>
         </g>
-        <path
-          className="cm-mouth"
-          style={{ d: `path('M 41 63 Q 50 ${63 + face.mouthCurve} 59 63')` } as CSSProperties}
-          d={`M 41 63 Q 50 ${63 + face.mouthCurve} 59 63`}
-        />
+        {smile && (
+          <path
+            className="cm-mouth"
+            style={{ d: `path('M 41 63 Q 50 ${63 + face.mouthCurve} 59 63')` } as CSSProperties}
+            d={`M 41 63 Q 50 ${63 + face.mouthCurve} 59 63`}
+          />
+        )}
       </g>
     </g>
   );

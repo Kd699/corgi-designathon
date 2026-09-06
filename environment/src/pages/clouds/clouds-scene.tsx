@@ -418,6 +418,8 @@ export default function CloudsScene() {
       // Swap the motif's solids: white body / sky face, or negative-sky
       // body / white face (clouds-motif.tsx).
       invert: false,
+      // The mouth is parked for now — flip this to bring the smile back.
+      smile: false,
       speed: [2, 0, 10, 0.1],
       fullness: [0.35, 0, 1, 0.01],
       intensity: [0.5, 0, 1, 0.01],
@@ -486,7 +488,7 @@ export default function CloudsScene() {
           <Scene dials={values} />
         </Canvas>
       )}
-      <CloudsMotif mood={values.mood} summary={readForSky(values.sky).summary} invert={values.invert} />
+      <CloudsMotif mood={values.mood} summary={readForSky(values.sky).summary} invert={values.invert} smile={values.smile} />
       <DialRoot position="top-right" theme="dark" productionEnabled />
     </div>
   );

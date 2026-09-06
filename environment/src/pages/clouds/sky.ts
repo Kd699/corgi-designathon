@@ -162,6 +162,8 @@ export interface CloudDials {
   mood: "Content" | "Excited" | "Tense" | "Weary" | "Asleep";
   /** Inverted motif: negative-sky body, white face (clouds-motif.tsx). */
   invert: boolean;
+  /** The mouth is parked for now — this brings the smile back. */
+  smile: boolean;
   speed: number;
   fullness: number;
   intensity: number;
