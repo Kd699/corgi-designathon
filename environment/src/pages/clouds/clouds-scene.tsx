@@ -80,7 +80,7 @@ import { DialRoot, useDialKitController, type DialConfig } from "dialkit";
 import "dialkit/styles.css";
 import WispsCanvas from "./clouds-wisps";
 import CloudsMotif, { MOTIF_MOODS } from "./clouds-motif";
-import { moodForSky } from "./clouds-signals";
+import { moodForSky, readForSky } from "./clouds-signals";
 import {
   SKY_PRESETS,
   ease,
@@ -483,7 +483,7 @@ export default function CloudsScene() {
           <Scene dials={values} />
         </Canvas>
       )}
-      <CloudsMotif mood={values.mood} />
+      <CloudsMotif mood={values.mood} summary={readForSky(values.sky).summary} />
       <DialRoot position="top-right" theme="dark" productionEnabled />
     </div>
   );

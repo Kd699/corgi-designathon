@@ -77,10 +77,33 @@ function nearestPreset(hour: number): SkyPresetName {
   return t < 0.5 ? before[0] : after[0];
 }
 
-/** buttonSpec.ts's expression conditional, capitalised to MotifMood:
- *  idle → asleep; high arousal splits excited/tense on valence;
- *  low arousal splits content/weary. */
-export function moodForSky(sky: "Live" | SkyPresetName): MotifMood {
+/** A summary sentence with the signals it cites marked as pills. */
+export type ReadSegment = string | { pill: string };
+export type SkyRead = { mood: MotifMood; summary: ReadSegment[] };
+
+const bpm = (s: SimSignals) => ({ pill: `${s.heartRate} bpm` });
+const rated = (s: SimSignals) => ({ pill: `${s.mood}/5` });
+const idleFor = (s: SimSignals) => ({ pill: `idle ${s.idleSeconds}s` });
+
+// One line per stop: how the day feels there and why, citing the same
+// signal bundle the mood was derived from — so the pills are receipts,
+// not decoration.
+const SUMMARIES: Record<SkyPresetName, (s: SimSignals) => ReadSegment[]> = {
+  "Pre-dawn": (s) => ["Still under — nothing has moved for ", idleFor(s), " and your heart rate is resting at ", bpm(s), "."],
+  Sunrise: (s) => ["Up with the sun and running — your heart rate was last ", bpm(s), ", and you rated the morning ", rated(s), "."],
+  Morning: (s) => ["Settled into the day — heart rate steady at ", bpm(s), ", feeling ", rated(s), "."],
+  Midday: (s) => ["Peak of the day and moving — your heart rate was last ", bpm(s), ", feeling ", rated(s), "."],
+  Afternoon: (s) => ["The post-lunch dip — heart rate down to ", bpm(s), ", and you rated this stretch ", rated(s), "."],
+  Sunset: (s) => ["Winding down, pleased with it — heart rate at ", bpm(s), ", feeling ", rated(s), "."],
+  Dusk: (s) => ["Wound up as the light goes — your heart rate was last ", bpm(s), ", and you rated the evening ", rated(s), "."],
+  Night: (s) => ["Out cold — ", idleFor(s), ", heart rate down at ", bpm(s), "."],
+};
+
+/** The full read for a sky: buttonSpec.ts's expression conditional
+ *  (idle → asleep; high arousal splits excited/tense on valence; low
+ *  arousal splits content/weary), plus the summary line citing the
+ *  signals that produced it. */
+export function readForSky(sky: "Live" | SkyPresetName): SkyRead {
   const name =
     sky === "Live"
       ? nearestPreset(new Date().getHours() + new Date().getMinutes() / 60)
@@ -91,5 +114,10 @@ export function moodForSky(sky: "Live" | SkyPresetName): MotifMood {
   const idle = s.idleSeconds > 90;
   const high = arousal > 0.6;
   const positive = valence >= 0;
-  return idle ? "Asleep" : high ? (positive ? "Excited" : "Tense") : positive ? "Content" : "Weary";
+  const mood: MotifMood = idle ? "Asleep" : high ? (positive ? "Excited" : "Tense") : positive ? "Content" : "Weary";
+  return { mood, summary: SUMMARIES[name](s) };
+}
+
+export function moodForSky(sky: "Live" | SkyPresetName): MotifMood {
+  return readForSky(sky).mood;
 }

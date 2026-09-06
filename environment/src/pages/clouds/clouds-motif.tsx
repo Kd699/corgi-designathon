@@ -16,6 +16,7 @@
 // morphs use CSS d: path() transitions (Chromium; other engines snap).
 
 import type { CSSProperties } from "react";
+import type { ReadSegment } from "./clouds-signals";
 
 export type MotifMood = "Content" | "Excited" | "Tense" | "Weary" | "Asleep";
 export const MOTIF_MOODS: readonly MotifMood[] = [
@@ -88,9 +89,19 @@ const CSS = /* css */ `
   .cm-motif .cm-shape, .cm-motif .cm-eye, .cm-motif .cm-mouth, .cm-motif .cm-brows, .cm-motif .cm-brows path, .cm-motif .cm-eye-tilt { transition: none; }
 }
 .cm-mood-label { margin-top: 0.4em; font-family: 'PP Editorial Old', ui-serif, Georgia, serif; font-weight: 400; font-size: min(5vmin, 34px); line-height: 1; color: #fff; text-shadow: 0 2px 14px rgba(0,0,0,0.18); }
+.cm-read { margin-top: 0.9em; max-width: min(78vmin, 480px); padding: 0 16px; text-align: center; font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; font-weight: 400; font-size: 14px; line-height: 2; color: rgba(255,255,255,0.92); text-shadow: 0 1px 10px rgba(0,0,0,0.22); }
+.cm-pill { display: inline-block; padding: 0.05em 0.65em; margin: 0 0.1em; border-radius: 999px; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35); backdrop-filter: blur(6px); font-variant-numeric: tabular-nums; font-size: 0.86em; line-height: 1.6; white-space: nowrap; vertical-align: 0.05em; }
 `;
 
-export default function CloudsMotif({ mood }: { mood: MotifMood }) {
+export default function CloudsMotif({
+  mood,
+  summary,
+}: {
+  mood: MotifMood;
+  /** The read behind the mood (clouds-signals.ts) — signal citations
+   *  arrive as { pill } segments and render as chips in the line. */
+  summary?: ReadSegment[];
+}) {
   const face = SPECS[mood] ?? SPECS.Content;
   const blob = blobPath(face.pleasant, face.energy);
   const style = {
@@ -142,6 +153,17 @@ export default function CloudsMotif({ mood }: { mood: MotifMood }) {
         />
       </svg>
       <span className="cm-mood-label">{mood}</span>
+      {summary && (
+        <p className="cm-read">
+          {summary.map((seg, i) =>
+            typeof seg === "string" ? (
+              <span key={i}>{seg}</span>
+            ) : (
+              <span key={i} className="cm-pill">{seg.pill}</span>
+            )
+          )}
+        </p>
+      )}
     </div>
   );
 }
