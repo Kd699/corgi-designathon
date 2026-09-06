@@ -55,6 +55,7 @@ const CSS = /* css */ `
   .cm-face .cm-blink, .cm-face .cm-gaze { animation: none; }
   .cm-face .cm-eye, .cm-face .cm-mouth, .cm-face .cm-brows, .cm-face .cm-brows path, .cm-face .cm-eye-tilt { transition: none; }
 }
+.cm-mood-label { margin-top: 0.4em; font-family: 'PP Editorial Old', ui-serif, Georgia, serif; font-weight: 400; font-size: min(5vmin, 34px); line-height: 1; color: #fff; text-shadow: 0 2px 14px rgba(0,0,0,0.18); }
 `;
 
 export default function CloudsMotif({ mood }: { mood: MotifMood }) {
@@ -64,7 +65,7 @@ export default function CloudsMotif({ mood }: { mood: MotifMood }) {
     "--cm-gaze-distance": `${face.gazePixels}px`,
   } as CSSProperties;
   return (
-    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
       <style>{CSS}</style>
       <svg
         className={`cm-face${face.asleep ? " cm-asleep" : ""}`}
@@ -91,6 +92,7 @@ export default function CloudsMotif({ mood }: { mood: MotifMood }) {
           />
         </g>
       </svg>
+      <span className="cm-mood-label">{mood}</span>
     </div>
   );
 }

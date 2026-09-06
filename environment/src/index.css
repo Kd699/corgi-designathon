@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* PP Editorial Old (public/fonts, Befonts personal-use licence). Regular is
+   the working cut — the motif's mood label on /clouds — with the other
+   styles declared so the family is usable anywhere. */
+@font-face { font-family: 'PP Editorial Old'; src: url('/fonts/ppeditorialold-regular.otf') format('opentype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'PP Editorial Old'; src: url('/fonts/ppeditorialold-italic.otf') format('opentype'); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: 'PP Editorial Old'; src: url('/fonts/ppeditorialold-ultralight.otf') format('opentype'); font-weight: 200; font-style: normal; font-display: swap; }
+@font-face { font-family: 'PP Editorial Old'; src: url('/fonts/ppeditorialold-ultralightitalic.otf') format('opentype'); font-weight: 200; font-style: italic; font-display: swap; }
+@font-face { font-family: 'PP Editorial Old'; src: url('/fonts/ppeditorialold-ultrabold.otf') format('opentype'); font-weight: 800; font-style: normal; font-display: swap; }
+@font-face { font-family: 'PP Editorial Old'; src: url('/fonts/ppeditorialold-ultrabolditalic.otf') format('opentype'); font-weight: 800; font-style: italic; font-display: swap; }
+
 html, body, #root { height: 100%; }
 body { margin: 0; font-family: 'Work Sans', ui-sans-serif, system-ui, -apple-system, sans-serif; }
 
