@@ -89,14 +89,14 @@ const idleFor = (s: SimSignals) => ({ pill: `idle ${s.idleSeconds}s` });
 // signal bundle the mood was derived from — so the pills are receipts,
 // not decoration.
 const SUMMARIES: Record<SkyPresetName, (s: SimSignals) => ReadSegment[]> = {
-  "Pre-dawn": (s) => ["Still under — nothing has moved for ", idleFor(s), " and your heart rate is resting at ", bpm(s), "."],
-  Sunrise: (s) => ["Up with the sun and running — your heart rate was last ", bpm(s), ", and you rated the morning ", rated(s), "."],
-  Morning: (s) => ["Settled into the day — heart rate steady at ", bpm(s), ", feeling ", rated(s), "."],
-  Midday: (s) => ["Peak of the day and moving — your heart rate was last ", bpm(s), ", feeling ", rated(s), "."],
-  Afternoon: (s) => ["The post-lunch dip — heart rate down to ", bpm(s), ", and you rated this stretch ", rated(s), "."],
-  Sunset: (s) => ["Winding down, pleased with it — heart rate at ", bpm(s), ", feeling ", rated(s), "."],
-  Dusk: (s) => ["Wound up as the light goes — your heart rate was last ", bpm(s), ", and you rated the evening ", rated(s), "."],
-  Night: (s) => ["Out cold — ", idleFor(s), ", heart rate down at ", bpm(s), "."],
+  "Pre-dawn": (s) => ["Still under: nothing has moved for ", idleFor(s), " and your heart rate is resting at ", bpm(s), "."],
+  Sunrise: (s) => ["Up with the sun and running: your heart rate was last ", bpm(s), ", and you rated the morning ", rated(s), "."],
+  Morning: (s) => ["Settled into the day, heart rate steady at ", bpm(s), ", feeling ", rated(s), "."],
+  Midday: (s) => ["Peak of the day and moving: your heart rate was last ", bpm(s), ", feeling ", rated(s), "."],
+  Afternoon: (s) => ["The post-lunch dip: heart rate down to ", bpm(s), ", and you rated this stretch ", rated(s), "."],
+  Sunset: (s) => ["Winding down, pleased with it: heart rate at ", bpm(s), ", feeling ", rated(s), "."],
+  Dusk: (s) => ["Wound up as the light goes: your heart rate was last ", bpm(s), ", and you rated the evening ", rated(s), "."],
+  Night: (s) => ["Out cold: ", idleFor(s), ", heart rate down at ", bpm(s), "."],
 };
 
 /** The full read for a sky: buttonSpec.ts's expression conditional
