@@ -585,6 +585,26 @@ export default function CloudsScene() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // SPACE walks the simulated moods: each press steps the sky dial to the
+  // next preset, and everything downstream swaps with it — the scene
+  // transition, the signal-derived mood and face, the heading pan, the
+  // read under the label (the sky effect above also retires any session).
+  // Not while typing, not while a voice session owns the page.
+  useEffect(() => {
+    const onSpace = (e: KeyboardEvent) => {
+      if (e.key !== " " || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "BUTTON" || t.isContentEditable)) return;
+      if (voiceLive) return;
+      e.preventDefault(); // space would scroll the history into view
+      const keys = Object.keys(SKY_PRESETS) as (keyof typeof SKY_PRESETS)[];
+      const i = keys.indexOf(skyRef.current as keyof typeof SKY_PRESETS);
+      setValue("sky", keys[(i + 1) % keys.length]);
+    };
+    window.addEventListener("keydown", onSpace);
+    return () => window.removeEventListener("keydown", onSpace);
+  }, [voiceLive, setValue]);
+
   return (
     <div ref={rootRef} className="relative min-h-[100dvh] w-full bg-black">
       {/* The sky is FIXED: the page scrolls (motif, then the session
