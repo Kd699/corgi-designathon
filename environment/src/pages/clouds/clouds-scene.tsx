@@ -80,6 +80,7 @@ import { DialRoot, useDialKitController, type DialConfig } from "dialkit";
 import "dialkit/styles.css";
 import WispsCanvas from "./clouds-wisps";
 import CloudsMotif, { MOTIF_MOODS } from "./clouds-motif";
+import { moodForSky } from "./clouds-signals";
 import {
   SKY_PRESETS,
   ease,
@@ -451,14 +452,17 @@ export default function CloudsScene() {
   const values = dial.values as unknown as CloudDials;
 
   // Selecting a sky swings the heading dial to that sky's postcard
-  // direction (Live: the nearer stop's). setValue, not a derived value, so
-  // the dial shows where it points and stays adjustable from there — the
-  // frame loop then PANS to it.
+  // direction (Live: the nearer stop's), and DERIVES the motif's mood from
+  // that hour's signals (clouds-signals.ts — the signal simulation's own
+  // rules). setValue, not derived values, so both dials show where they
+  // landed and stay adjustable from there — the frame loop then PANS to
+  // the heading, and the face morphs to the mood.
   const setValue = dial.setValue;
   useEffect(() => {
     const heading =
       values.sky === "Live" ? liveSky().heading : SKY_PRESETS[values.sky].heading;
     setValue("view.heading", heading);
+    setValue("mood", moodForSky(values.sky));
   }, [values.sky, setValue]);
 
   return (
