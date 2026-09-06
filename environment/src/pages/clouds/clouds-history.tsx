@@ -46,7 +46,11 @@ function when(iso: string): string {
 
 const CSS = /* css */ `
 .ch { position: relative; z-index: 20; pointer-events: auto; width: min(92vw, 560px); margin: -14vh auto 0; padding: 0 0 20vh;
-  display: flex; flex-direction: column; font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; color: #fff; }
+  display: flex; flex-direction: column; font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; color: #fff;
+  /* Where the nav's scrollIntoView lands: comfortably BELOW the top ~18%
+     where the ch-away timeline lives, so switching scope scrolls to
+     content you can read — not cards arriving pre-blurred. */
+  scroll-margin-top: 24vh; }
 .ch-title { margin: 0 0 16px 6px; font-family: 'PP Editorial Old', ui-serif, Georgia, serif; font-weight: 400; font-size: 20px; opacity: 0.9; }
 .ch-count { font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; font-size: 12px; opacity: 0.7; margin-left: 10px; letter-spacing: 0.06em; }
 /* The day's read, when a past day is open: one grouped paragraph above its
