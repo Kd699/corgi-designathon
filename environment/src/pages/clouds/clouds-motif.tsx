@@ -166,13 +166,14 @@ export default function CloudsMotif({
   const faceGroup = (cls: "cm-cutout" | "cm-ink") => (
     <g className={cls} transform="translate(14 14) scale(0.72)">
       <g className="cm-gaze">
-        <g className="cm-brows" style={{ opacity: face.browOpacity }}>
-          <path d="M 30 25 L 42 25" style={{ transform: `rotate(${face.browTilt}deg)`, transformOrigin: "36px 25px" }} />
-          <path d="M 58 25 L 70 25" style={{ transform: `rotate(${-face.browTilt}deg)`, transformOrigin: "64px 25px" }} />
-        </g>
-        {/* The eyes alone ride cm-track — long round capsules that
-            swivel after the pointer, Grok-companion style. */}
+        {/* Brows and eyes ride cm-track together — long round capsules
+            (plus their brows) that swivel after the pointer,
+            Grok-companion style. The mouth stays anchored. */}
         <g className="cm-track">
+          <g className="cm-brows" style={{ opacity: face.browOpacity }}>
+            <path d="M 30 25 L 42 25" style={{ transform: `rotate(${face.browTilt}deg)`, transformOrigin: "36px 25px" }} />
+            <path d="M 58 25 L 70 25" style={{ transform: `rotate(${-face.browTilt}deg)`, transformOrigin: "64px 25px" }} />
+          </g>
           <g className="cm-eye-tilt" style={{ transform: `rotate(${face.eyeTilt}deg)`, transformOrigin: "36px 44px" }}>
             <g className="cm-blink"><rect className="cm-eye" x="30.5" y={44 - face.eyeHeight / 2} width="11" height={face.eyeHeight} rx="5.5" /></g>
           </g>
