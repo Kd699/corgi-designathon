@@ -10,11 +10,18 @@ export type HistoryItem = SessionRead & { at: string; sky: string };
 
 const KEY = "clouds-sessions";
 
+/** The empty-mic read (clouds-session.ts localRead with no text). Shown in
+ *  the moment as feedback, but a non-session: it never belongs in the
+ *  history, and any already saved get swept on load. */
+export function isEmptyRead(read: SessionRead): boolean {
+  return read.heading === "Nothing came through";
+}
+
 export function loadHistory(): HistoryItem[] {
   try {
     const raw = localStorage.getItem(KEY);
     const parsed = raw ? (JSON.parse(raw) as HistoryItem[]) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.filter((item) => !isEmptyRead(item)) : [];
   } catch {
     return [];
   }

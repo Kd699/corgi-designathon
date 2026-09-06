@@ -80,7 +80,7 @@ import { DialRoot, useDialKitController, type DialConfig } from "dialkit";
 import "dialkit/styles.css";
 import WispsCanvas from "./clouds-wisps";
 import CloudsMotif, { MOTIF_MOODS } from "./clouds-motif";
-import SessionHistory, { loadHistory, saveHistory, type HistoryItem } from "./clouds-history";
+import SessionHistory, { isEmptyRead, loadHistory, saveHistory, type HistoryItem } from "./clouds-history";
 import type { SessionRead } from "./clouds-session";
 import { THEME_SKY } from "./clouds-voice";
 import { moodForSky, readForSky } from "./clouds-signals";
@@ -488,6 +488,8 @@ export default function CloudsScene() {
       skyFromReadRef.current = true;
       setValue("sky", readSky);
     }
+    // An empty mic is feedback, not a session: show the read, log nothing.
+    if (isEmptyRead(read)) return;
     setHistory((prev) => {
       // The sky the session lands on: the read's own theme if it moved it,
       // else wherever any spoken theme had already taken the dial.
