@@ -4,7 +4,7 @@
 // (clouds-scene.tsx fixes the canvas); the motif fades as you scroll into
 // this, and the cards scroll up over the sky.
 
-import { useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { SessionRead } from "./clouds-session";
 
 export type HistoryItem = SessionRead & { at: string; sky: string };
@@ -200,6 +200,7 @@ export default function SessionHistory({
   title = "Sessions",
   lead = null,
   emptyNote = null,
+  extra = null,
 }: {
   items: HistoryItem[];
   inverted: boolean;
@@ -215,8 +216,12 @@ export default function SessionHistory({
   /** With this set, an empty day still renders — the note instead of
    *  nothing, so stepping back to a quiet day answers rather than blanks. */
   emptyNote?: string | null;
+  /** A card above the sessions that isn't a session — the week/month
+   *  trends card (clouds-trends.tsx). Wrapped as a ch-item so it scrolls
+   *  away through the same progressive blur as the cards. */
+  extra?: ReactNode;
 }) {
-  if (items.length === 0 && !emptyNote) return null;
+  if (items.length === 0 && !emptyNote && !extra) return null;
   return (
     <section className="ch" data-invert={inverted ? "true" : "false"} aria-label="Session history">
       <style>{CSS}</style>
@@ -225,6 +230,7 @@ export default function SessionHistory({
         {items.length > 0 && <span className="ch-count">{items.length}</span>}
       </h2>
       {lead && <p className="ch-lead">{lead}</p>}
+      {extra && <div className="ch-item">{extra}</div>}
       {items.length === 0 && emptyNote && <p className="ch-empty">{emptyNote}</p>}
       {items
         .slice()

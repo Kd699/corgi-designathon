@@ -56,7 +56,7 @@
 // The default weather/shape/turbulence/star textures stream from the takram
 // packages' GitHub media host on first load; nothing is bundled here.
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   EffectComposer,
@@ -81,6 +81,7 @@ import "dialkit/styles.css";
 import WispsCanvas from "./clouds-wisps";
 import CloudsMotif, { MOTIF_MOODS } from "./clouds-motif";
 import SessionHistory, { isEmptyRead, loadHistory, saveHistory, type HistoryItem } from "./clouds-history";
+import TrendsCard from "./clouds-trends";
 import { summariseDay, type DayPicture, type SessionRead } from "./clouds-session";
 import { THEME_SKY } from "./clouds-voice";
 import { moodForSky, readForSky } from "./clouds-signals";
@@ -126,8 +127,18 @@ class HorizonWashEffect extends Effect {
 
 // THE DAY NAV. A small pill fixed top-centre: "Today", with a back arrow
 // that steps the SESSIONS VIEW to the previous day (and a forward arrow to
-// walk home). The sky and the motif stay live — only the list below is
-// day-scoped, and a past day opens with its own grouped read on top.
+// walk home). Tapping the label drops a scope menu — Today, This week,
+// This month — whose rows blur-stagger in and out; week and month scope
+// the list below to the period and put the trends card on top. The sky
+// and the motif stay live — only the sessions view is scoped.
+export type SessionScope = "day" | "week" | "month";
+
+const SCOPE_OPTIONS: { id: SessionScope; label: string }[] = [
+  { id: "day", label: "Today" },
+  { id: "week", label: "This week" },
+  { id: "month", label: "This month" },
+];
+
 const DAY_NAV_CSS = /* css */ `
 .cn { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 30; pointer-events: auto;
   display: flex; align-items: center; gap: 2px; padding: 4px 6px; border-radius: 999px;
@@ -139,10 +150,42 @@ const DAY_NAV_CSS = /* css */ `
   transition: background 140ms ease; }
 .cn-btn:hover { background: rgba(255,255,255,0.18); }
 .cn-btn:disabled { opacity: 0.28; cursor: default; background: transparent; }
-.cn-label { min-width: 86px; text-align: center; font-size: 13px; letter-spacing: 0.02em; user-select: none; }
-/* On the inverted (white) page the pill goes dark-on-light. */
+.cn-label { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 96px; height: 26px;
+  border: none; border-radius: 999px; padding: 0 10px; background: transparent; color: inherit; cursor: pointer;
+  font: inherit; font-size: 13px; letter-spacing: 0.02em; user-select: none; transition: background 140ms ease; }
+.cn-label:hover { background: rgba(255,255,255,0.14); }
+.cn-caret { transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+.cn-label[aria-expanded="true"] .cn-caret { transform: rotate(180deg); }
+/* The scope menu: each row arrives out of a blur, one after the other, and
+   leaves the same way in reverse — closing keeps the menu mounted until
+   the last row has faded (data-closing). */
+.cn-menu { position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 3px; min-width: 148px; padding: 5px; border-radius: 18px;
+  background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.32);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.cn-item { border: none; border-radius: 13px; padding: 8px 14px; background: transparent; color: inherit;
+  cursor: pointer; font: inherit; font-size: 13px; text-align: left; transition: background 140ms ease;
+  animation: cn-item-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--i) * 55ms); }
+.cn-item:hover { background: rgba(255,255,255,0.18); }
+.cn-item[data-current="true"] { background: rgba(255,255,255,0.24); }
+@keyframes cn-item-in {
+  from { opacity: 0; filter: blur(9px); transform: translateY(-7px); }
+  to { opacity: 1; filter: blur(0); transform: none; }
+}
+.cn-menu[data-closing="true"] .cn-item {
+  animation: cn-item-out 260ms cubic-bezier(0.4, 0, 0.7, 0.4) both;
+  animation-delay: calc((var(--n) - 1 - var(--i)) * 45ms);
+  pointer-events: none;
+}
+@keyframes cn-item-out {
+  to { opacity: 0; filter: blur(9px); transform: translateY(-7px); }
+}
+@media (prefers-reduced-motion: reduce) { .cn-item { animation: none; } }
+/* On the inverted (white) page the pill and menu go dark-on-light. */
 .cn[data-invert="true"] { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.18); color: #111; }
-.cn[data-invert="true"] .cn-btn:hover { background: rgba(0,0,0,0.08); }
+.cn[data-invert="true"] .cn-btn:hover, .cn[data-invert="true"] .cn-label:hover, .cn[data-invert="true"] .cn-item:hover { background: rgba(0,0,0,0.08); }
+.cn[data-invert="true"] .cn-menu { background: rgba(255,255,255,0.85); border-color: rgba(0,0,0,0.14); }
+.cn[data-invert="true"] .cn-item[data-current="true"] { background: rgba(0,0,0,0.1); }
 `;
 
 /** offset days back from today → what the pill says. */
@@ -153,33 +196,98 @@ function dayLabel(offset: number, day: Date): string {
 }
 
 function DayNav({
+  scope,
+  onScope,
   offset,
   day,
   canBack,
   inverted,
   onStep,
 }: {
+  scope: SessionScope;
+  onScope: (scope: SessionScope) => void;
   offset: number;
   day: Date;
   canBack: boolean;
   inverted: boolean;
   onStep: (delta: number) => void;
 }) {
+  // null → not mounted; open → staggering in; closing → staggering out,
+  // unmounted when the last row's out-animation has run.
+  const [menu, setMenu] = useState<null | "open" | "closing">(null);
+  const navRef = useRef<HTMLElement>(null);
+  const close = () => {
+    setMenu((m) => (m === "open" ? "closing" : m));
+    setTimeout(() => setMenu((m) => (m === "closing" ? null : m)), 420);
+  };
+  // A tap anywhere else folds the menu away.
+  useEffect(() => {
+    if (menu !== "open") return;
+    const onDown = (e: PointerEvent) => {
+      if (!navRef.current?.contains(e.target as Node)) close();
+    };
+    window.addEventListener("pointerdown", onDown);
+    return () => window.removeEventListener("pointerdown", onDown);
+  }, [menu]);
+
+  const label =
+    scope === "day" ? dayLabel(offset, day) : scope === "week" ? "This week" : "This month";
   const chevron = (dir: 1 | -1) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ transform: dir === 1 ? "scaleX(-1)" : undefined }}>
       <path d="M8.8 2.8 4.6 7l4.2 4.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
   return (
-    <nav className="cn" data-invert={inverted ? "true" : "false"} aria-label="Day">
+    <nav className="cn" data-invert={inverted ? "true" : "false"} aria-label="Sessions scope" ref={navRef}>
       <style>{DAY_NAV_CSS}</style>
-      <button className="cn-btn" type="button" onClick={() => onStep(1)} disabled={!canBack} aria-label="Previous day">
-        {chevron(-1)}
+      {/* The day arrows only mean something in day scope; week and month
+          hold the pill to just the label. */}
+      {scope === "day" && (
+        <button className="cn-btn" type="button" onClick={() => onStep(1)} disabled={!canBack} aria-label="Previous day">
+          {chevron(-1)}
+        </button>
+      )}
+      <button
+        className="cn-label"
+        type="button"
+        aria-expanded={menu === "open"}
+        onClick={() => (menu === "open" ? close() : setMenu("open"))}
+      >
+        {label}
+        <svg className="cn-caret" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+          <path d="M2 3.8 5 6.8 8 3.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
-      <span className="cn-label">{dayLabel(offset, day)}</span>
-      <button className="cn-btn" type="button" onClick={() => onStep(-1)} disabled={offset === 0} aria-label="Next day">
-        {chevron(1)}
-      </button>
+      {scope === "day" && (
+        <button className="cn-btn" type="button" onClick={() => onStep(-1)} disabled={offset === 0} aria-label="Next day">
+          {chevron(1)}
+        </button>
+      )}
+      {menu && (
+        <div
+          className="cn-menu"
+          data-closing={menu === "closing" ? "true" : "false"}
+          style={{ "--n": SCOPE_OPTIONS.length } as CSSProperties}
+          role="menu"
+        >
+          {SCOPE_OPTIONS.map((option, i) => (
+            <button
+              key={option.id}
+              className="cn-item"
+              type="button"
+              role="menuitem"
+              data-current={option.id === scope ? "true" : "false"}
+              style={{ "--i": i } as CSSProperties}
+              onClick={() => {
+                onScope(option.id);
+                close();
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
     </nav>
   );
 }
@@ -596,7 +704,10 @@ export default function CloudsScene() {
   // THE DAY IN VIEW. The top nav steps the sessions view back a day at a
   // time; the sky and the motif stay today's. A past day gets its own
   // grouped read (summariseDay again) above its cards, cached per day so
-  // walking back and forth doesn't re-ask.
+  // walking back and forth doesn't re-ask. The label's dropdown widens the
+  // scope instead: This week / This month pull the whole period's sessions
+  // and lead with the trends card.
+  const [scope, setScope] = useState<SessionScope>("day");
   const [dayOffset, setDayOffset] = useState(0);
   const viewedDay = useMemo(() => {
     const d = new Date();
@@ -623,16 +734,26 @@ export default function CloudsScene() {
     summariseDay(dayItems).then((p) => setDayReads((prev) => ({ ...prev, [key]: p })));
   }, [dayOffset, dayItems, viewedDay]);
   const dayRead = dayOffset > 0 ? dayReads[viewedDay.toDateString()] ?? null : null;
-  // Stepping into a past day brings its sessions into view — the summary
-  // lives down there, and a click that changes nothing on screen reads as
-  // a dead button.
+  // Week and month scope: every session since Monday / since the 1st.
+  const periodItems = useMemo(() => {
+    if (scope === "day") return null;
+    const start = new Date();
+    if (scope === "week") start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    else start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+    return history.filter((h) => new Date(h.at) >= start);
+  }, [scope, history]);
+  const shownItems = periodItems ?? dayItems;
+  // Stepping into a past day (or a wider scope) brings the sessions into
+  // view — the summary and the trends live down there, and a click that
+  // changes nothing on screen reads as a dead button.
   useEffect(() => {
-    if (dayOffset === 0) return;
+    if (dayOffset === 0 && scope === "day") return;
     const id = requestAnimationFrame(() => {
       document.querySelector(".ch")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
     return () => cancelAnimationFrame(id);
-  }, [dayOffset]);
+  }, [dayOffset, scope]);
 
   // Scrolling into the history fades the motif — shape, greeting, read —
   // while the sky (a fixed canvas) stays exactly where it is. One CSS var,
@@ -754,8 +875,13 @@ export default function CloudsScene() {
       />
       {/* The day nav and history step aside while a voice session is live —
           the white page belongs to the tracker and its stream. */}
-      {!voiceLive && (history.length > 0 || dayOffset > 0) && (
+      {!voiceLive && (history.length > 0 || dayOffset > 0 || scope !== "day") && (
         <DayNav
+          scope={scope}
+          onScope={(next) => {
+            setScope(next);
+            if (next === "day") setDayOffset(0);
+          }}
           offset={dayOffset}
           day={viewedDay}
           canBack={canBack}
@@ -765,11 +891,28 @@ export default function CloudsScene() {
       )}
       {!voiceLive && (
         <SessionHistory
-          items={dayItems}
+          items={shownItems}
           inverted={values.invert}
-          title={dayOffset === 0 ? "Sessions" : dayLabel(dayOffset, viewedDay)}
-          lead={dayRead ? dayRead.text : null}
-          emptyNote={dayOffset > 0 ? "Nothing logged this day." : null}
+          title={
+            scope === "week"
+              ? "This week"
+              : scope === "month"
+                ? "This month"
+                : dayOffset === 0
+                  ? "Sessions"
+                  : dayLabel(dayOffset, viewedDay)
+          }
+          lead={scope === "day" && dayRead ? dayRead.text : null}
+          extra={scope !== "day" ? <TrendsCard scope={scope} /> : null}
+          emptyNote={
+            scope === "week"
+              ? "Nothing logged yet this week."
+              : scope === "month"
+                ? "Nothing logged yet this month."
+                : dayOffset > 0
+                  ? "Nothing logged this day."
+                  : null
+          }
           onDelete={(at) =>
             setHistory((prev) => {
               const next = prev.filter((item) => item.at !== at);
