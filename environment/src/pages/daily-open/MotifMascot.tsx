@@ -6,9 +6,7 @@
  * Nothing about the audio studio comes across: no AudioContext, no press tones, no toolbar.
  */
 import type { CSSProperties } from 'react';
-import { deriveMotif, type ButtonSpec } from './motif';
-import type { Signals } from '../../engine/signals';
-import type { EnvSpec } from '../../engine/derive';
+import type { ButtonSpec } from './motif';
 import './motif.css';
 
 /** Verbatim from motif+signal_simulation/src/ui/CharacterFace.tsx. */
@@ -35,9 +33,10 @@ function CharacterFace({ face, index }: { face: ButtonSpec['face']; index: numbe
   </svg>;
 }
 
-/** One specimen: the morphing outline, the face, and the motion the spec asks for. */
-export default function MotifMascot({ signals, spec, size = 132 }: { signals: Signals; spec: EnvSpec; size?: number }) {
-  const motif = deriveMotif(signals, spec.valence, spec.arousal);
+/** One specimen: the morphing outline, the face, and the motion the spec asks for.
+ *  Takes an already-derived motif so the caller can feed the same expression to the sky's
+ *  own face dial — one derive, two consumers, no chance of them disagreeing. */
+export default function MotifMascot({ motif, size = 132 }: { motif: ButtonSpec; size?: number }) {
   const style = {
     '--button-duration': `${motif.duration}s`,
     '--button-amplitude': `${motif.amplitude}px`,

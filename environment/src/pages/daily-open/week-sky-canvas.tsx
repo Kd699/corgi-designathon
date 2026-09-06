@@ -7,6 +7,15 @@
  */
 import { SKY_PRESETS, type CloudDials, type SkyPresetName } from '../clouds/sky';
 import WispsCanvas from '../clouds/clouds-wisps';
+import type { MotifMood } from '../clouds/clouds-motif';
+import type { ButtonSpec } from './motif';
+
+/* The sky carries its own face dial (clouds-motif), whose five moods are the same five
+ * expressions deriveMotif() produces — capitalised. Mapping them here means the read drives
+ * both the character on the card and anything the sky wants to do with it. */
+const MOOD_FOR: Record<ButtonSpec['face']['expression'], MotifMood> = {
+  content: 'Content', excited: 'Excited', tense: 'Tense', weary: 'Weary', asleep: 'Asleep',
+};
 
 /** Nearest sky preset by solar hour, wrapping midnight. Data-driven — no day is named. */
 function presetForHour(hour: number): SkyPresetName {
@@ -16,10 +25,11 @@ function presetForHour(hour: number): SkyPresetName {
 }
 
 /** The hour picks the light; the read modulates the deck. */
-function dialsFor(hour: number, arousal: number, valence: number): CloudDials {
+function dialsFor(hour: number, arousal: number, valence: number, expression: ButtonSpec['face']['expression']): CloudDials {
   return {
     engine: 'Wisps',
     sky: presetForHour(hour),
+    mood: MOOD_FOR[expression],
     // A wound-up day moves faster and holds a denser deck; a light one thins out.
     speed: 0.5 + arousal * 1.2,
     fullness: 0.75 + (1 - (valence + 1) / 2) * 0.6,
@@ -30,6 +40,8 @@ function dialsFor(hour: number, arousal: number, valence: number): CloudDials {
   };
 }
 
-export default function WeekSky({ hour, arousal, valence }: { hour: number; arousal: number; valence: number }) {
-  return <WispsCanvas dials={dialsFor(hour, arousal, valence)} />;
+export default function WeekSky({ hour, arousal, valence, expression }: {
+  hour: number; arousal: number; valence: number; expression: ButtonSpec['face']['expression'];
+}) {
+  return <WispsCanvas dials={dialsFor(hour, arousal, valence, expression)} />;
 }

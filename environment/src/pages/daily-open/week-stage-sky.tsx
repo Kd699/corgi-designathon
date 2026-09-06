@@ -18,6 +18,7 @@ import { Suspense, lazy, useEffect, useState } from 'react';
 import { DesktopFrame, type ScreenMode } from '../../components/v3artboard';
 import { derive } from '../../engine/derive';
 import MotifMascot from './MotifMascot';
+import { deriveMotif } from './motif';
 import './motif.css';
 import { WEEK_VIEWS, dayOf } from './week';
 import { Card, Pager, WEEK_STATES } from './week-in-review';
@@ -50,19 +51,21 @@ function WeekSkyScreen({ stateId, live }: { stateId: string; live: boolean }) {
   const view = WEEK_VIEWS[live ? i : start];
   const day = dayOf(view.day);
   const spec = derive(day.signals);
+  // One derive for both the character and the sky's own face dial.
+  const motif = deriveMotif(day.signals, spec.valence, spec.arousal);
 
   return (
     <div className="week-sky-stage relative h-full w-full overflow-hidden">
       {/* The sky owns the whole frame; everything else sits on top of it. */}
       <div className="absolute inset-0">
         <Suspense fallback={<div className="h-full w-full" style={{ background: spec.palette.from }} />}>
-          <WeekSky hour={day.signals.hour} arousal={spec.arousal} valence={spec.valence} />
+          <WeekSky hour={day.signals.hour} arousal={spec.arousal} valence={spec.valence} expression={motif.face.expression} />
         </Suspense>
       </div>
 
       <div className="relative flex h-full flex-col items-center justify-center gap-8 px-16" style={{ color: 'hsl(0 0% 10%)' }}>
         <div className="relative w-full max-w-[720px]">
-          <div className="absolute -top-20 left-6 z-10"><MotifMascot signals={day.signals} spec={spec} /></div>
+          <div className="absolute -top-20 left-6 z-10"><MotifMascot motif={motif} /></div>
           <Card view={view} spec={spec} />
         </div>
         {live
