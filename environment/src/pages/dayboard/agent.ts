@@ -236,10 +236,24 @@ function apply(base: DayState, patch: Partial<DayState>): DayState {
   };
 }
 
+/* Where the model lives.
+ *
+ * In dev, /api/xai — the Vite middleware in vite.config.ts, which holds the upstream and its
+ * auth in the server process. On a static host there is no server, so the built page talks to
+ * Spacetime's llm-proxy edge function directly with the Supabase anon token baked in at build
+ * time. That token is public by design (it ships in every Spacetime client); the xAI key it
+ * fronts never leaves Supabase. Set VITE_LLM_PROXY_URL + VITE_LLM_PROXY_TOKEN to build for
+ * hosting; leave them unset and the dev proxy is used. */
+const PROXY_URL = import.meta.env.VITE_LLM_PROXY_URL as string | undefined;
+const PROXY_TOKEN = import.meta.env.VITE_LLM_PROXY_TOKEN as string | undefined;
+const endpoint: { url: string; headers: Record<string, string> } = PROXY_URL && PROXY_TOKEN
+  ? { url: PROXY_URL, headers: { 'content-type': 'application/json', authorization: `Bearer ${PROXY_TOKEN}`, apikey: PROXY_TOKEN } }
+  : { url: '/api/xai', headers: { 'content-type': 'application/json' } };
+
 export async function think(text: string, base: DayState): Promise<AgentReply> {
-  const res = await fetch('/api/xai', {
+  const res = await fetch(endpoint.url, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: endpoint.headers,
     body: JSON.stringify({
       model: 'grok-4-latest',
       temperature: 0.4,

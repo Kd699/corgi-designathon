@@ -11,7 +11,8 @@
     "test": "vitest run",
     "dev:app": "vite --port 5300",
     "postinstall": "node scripts/apply-agentation-patch.mjs || true",
-    "smoke:voice": "node scripts/voice-smoke.mjs"
+    "smoke:voice": "node scripts/voice-smoke.mjs",
+    "deploy": "vite build && firebase deploy --only hosting"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",
