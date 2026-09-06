@@ -160,6 +160,8 @@ export interface CloudDials {
   sky: "Live" | SkyPresetName;
   /** The motif face's expression (clouds-motif.tsx). */
   mood: "Content" | "Excited" | "Tense" | "Weary" | "Asleep";
+  /** Inverted motif: negative-sky body, white face (clouds-motif.tsx). */
+  invert: boolean;
   speed: number;
   fullness: number;
   intensity: number;

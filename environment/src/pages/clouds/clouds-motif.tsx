@@ -72,10 +72,22 @@ function blobPath(pleasant: number, energy: number): string {
   return `M ${points[0]} L ${points.slice(1).join(" L ")} Z`;
 }
 
+/** The same blob in objectBoundingBox units (0..1) — the clipPath that
+ *  cuts the inverted-sky div to the character's silhouette. */
+function blobPath01(pleasant: number, energy: number): string {
+  return blobPath(pleasant, energy).replace(
+    /(\d+\.?\d*)/g,
+    (n) => (Number(n) / 100).toFixed(4)
+  );
+}
+
 const CSS = /* css */ `
-.cm-motif { width: min(30vmin, 240px); height: min(30vmin, 240px); overflow: visible; pointer-events: none; }
+.cm-wrap { position: relative; width: min(30vmin, 240px); height: min(30vmin, 240px); }
+.cm-motif { position: relative; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .cm-motif .cm-shape { fill: #fff; transition: d 700ms ease; }
 .cm-motif .cm-cutout { color: #000; }
+.cm-motif .cm-ink { color: #fff; }
+.cm-invert { position: absolute; inset: 0; pointer-events: none; backdrop-filter: invert(1); -webkit-backdrop-filter: invert(1); clip-path: url(#cm-blob-clip); }
 .cm-motif .cm-eye { fill: currentColor; transition: height 700ms ease, y 700ms ease; transform-box: fill-box; transform-origin: center; }
 .cm-motif .cm-mouth, .cm-motif .cm-brows path { fill: none; stroke: currentColor; stroke-width: 4.5; stroke-linecap: round; }
 .cm-motif .cm-mouth { transition: d 700ms ease; }
@@ -100,11 +112,16 @@ const CSS = /* css */ `
 export default function CloudsMotif({
   mood,
   summary,
+  invert = false,
 }: {
   mood: MotifMood;
   /** The read behind the mood (clouds-signals.ts) — signal citations
    *  arrive as { pill } segments and render as chips in the line. */
   summary?: ReadSegment[];
+  /** Swap what's solid: normally the body is white and the face is sky;
+   *  inverted, the body is the sky in NEGATIVE (backdrop-filter clipped to
+   *  the blob) and the face is drawn in white on top. */
+  invert?: boolean;
 }) {
   const face = SPECS[mood] ?? SPECS.Content;
   const blob = blobPath(face.pleasant, face.energy);
@@ -144,55 +161,76 @@ export default function CloudsMotif({
     };
   }, []);
 
+  // One face, two homes: inside the mask (black, cutting sky-holes in the
+  // white body) or drawn directly (white ink on the inverted-sky body).
+  const faceGroup = (cls: "cm-cutout" | "cm-ink") => (
+    <g className={cls} transform="translate(14 14) scale(0.72)">
+      <g className="cm-gaze">
+        <g className="cm-brows" style={{ opacity: face.browOpacity }}>
+          <path d="M 30 25 L 42 25" style={{ transform: `rotate(${face.browTilt}deg)`, transformOrigin: "36px 25px" }} />
+          <path d="M 58 25 L 70 25" style={{ transform: `rotate(${-face.browTilt}deg)`, transformOrigin: "64px 25px" }} />
+        </g>
+        {/* The eyes alone ride cm-track — long round capsules that
+            swivel after the pointer, Grok-companion style. */}
+        <g className="cm-track">
+          <g className="cm-eye-tilt" style={{ transform: `rotate(${face.eyeTilt}deg)`, transformOrigin: "36px 44px" }}>
+            <g className="cm-blink"><rect className="cm-eye" x="30.5" y={44 - face.eyeHeight / 2} width="11" height={face.eyeHeight} rx="5.5" /></g>
+          </g>
+          <g className="cm-eye-tilt" style={{ transform: `rotate(${-face.eyeTilt}deg)`, transformOrigin: "64px 44px" }}>
+            <g className="cm-blink"><rect className="cm-eye" x="58.5" y={44 - face.eyeHeight / 2} width="11" height={face.eyeHeight} rx="5.5" /></g>
+          </g>
+        </g>
+        <path
+          className="cm-mouth"
+          style={{ d: `path('M 41 63 Q 50 ${63 + face.mouthCurve} 59 63')` } as CSSProperties}
+          d={`M 41 63 Q 50 ${63 + face.mouthCurve} 59 63`}
+        />
+      </g>
+    </g>
+  );
+
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
       <style>{CSS}</style>
-      <svg
-        ref={svgRef}
-        className={`cm-motif${face.asleep ? " cm-asleep" : ""}`}
-        data-expression={mood}
-        viewBox="0 0 100 100"
-        aria-hidden="true"
-        style={style}
-      >
-        <defs>
-          {/* White keeps, black cuts: the rect keeps the whole blob and the
-              face group (drawn black, at the study's 72% face-to-body scale)
-              punches the features through to the sky. */}
-          <mask id="cm-motif-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
-            <rect width="100" height="100" fill="#fff" />
-            <g className="cm-cutout" transform="translate(14 14) scale(0.72)">
-              <g className="cm-gaze">
-                <g className="cm-brows" style={{ opacity: face.browOpacity }}>
-                  <path d="M 30 25 L 42 25" style={{ transform: `rotate(${face.browTilt}deg)`, transformOrigin: "36px 25px" }} />
-                  <path d="M 58 25 L 70 25" style={{ transform: `rotate(${-face.browTilt}deg)`, transformOrigin: "64px 25px" }} />
-                </g>
-                {/* The eyes alone ride cm-track — long round capsules that
-                    swivel after the pointer, Grok-companion style. */}
-                <g className="cm-track">
-                  <g className="cm-eye-tilt" style={{ transform: `rotate(${face.eyeTilt}deg)`, transformOrigin: "36px 44px" }}>
-                    <g className="cm-blink"><rect className="cm-eye" x="30.5" y={44 - face.eyeHeight / 2} width="11" height={face.eyeHeight} rx="5.5" /></g>
-                  </g>
-                  <g className="cm-eye-tilt" style={{ transform: `rotate(${-face.eyeTilt}deg)`, transformOrigin: "64px 44px" }}>
-                    <g className="cm-blink"><rect className="cm-eye" x="58.5" y={44 - face.eyeHeight / 2} width="11" height={face.eyeHeight} rx="5.5" /></g>
-                  </g>
-                </g>
-                <path
-                  className="cm-mouth"
-                  style={{ d: `path('M 41 63 Q 50 ${63 + face.mouthCurve} 59 63')` } as CSSProperties}
-                  d={`M 41 63 Q 50 ${63 + face.mouthCurve} 59 63`}
-                />
-              </g>
-            </g>
-          </mask>
-        </defs>
-        <path
-          className="cm-shape"
-          mask="url(#cm-motif-mask)"
-          style={{ d: `path('${blob}')` } as CSSProperties}
-          d={blob}
-        />
-      </svg>
+      <div className="cm-wrap">
+        {/* Inverted mode's body: the sky behind, colour-negated, clipped to
+            the blob silhouette. Sits under the svg so the white face reads
+            on top of it. */}
+        {invert && <div className="cm-invert" />}
+        <svg
+          ref={svgRef}
+          className={`cm-motif${face.asleep ? " cm-asleep" : ""}`}
+          data-expression={mood}
+          viewBox="0 0 100 100"
+          aria-hidden="true"
+          style={style}
+        >
+          <defs>
+            <clipPath id="cm-blob-clip" clipPathUnits="objectBoundingBox">
+              <path d={blobPath01(face.pleasant, face.energy)} />
+            </clipPath>
+            {/* White keeps, black cuts: the rect keeps the whole blob and
+                the face group (drawn black, at the study's 72%
+                face-to-body scale) punches the features through to the
+                sky. */}
+            {!invert && (
+              <mask id="cm-motif-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+                <rect width="100" height="100" fill="#fff" />
+                {faceGroup("cm-cutout")}
+              </mask>
+            )}
+          </defs>
+          {!invert && (
+            <path
+              className="cm-shape"
+              mask="url(#cm-motif-mask)"
+              style={{ d: `path('${blob}')` } as CSSProperties}
+              d={blob}
+            />
+          )}
+          {invert && faceGroup("cm-ink")}
+        </svg>
+      </div>
       <span className="cm-mood-label">{mood}</span>
       {summary && (
         <p className="cm-read">

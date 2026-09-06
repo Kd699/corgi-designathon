@@ -415,6 +415,9 @@ export default function CloudsScene() {
         options: [...MOTIF_MOODS],
         default: "Content",
       },
+      // Swap the motif's solids: white body / sky face, or negative-sky
+      // body / white face (clouds-motif.tsx).
+      invert: false,
       speed: [2, 0, 10, 0.1],
       fullness: [0.35, 0, 1, 0.01],
       intensity: [0.5, 0, 1, 0.01],
@@ -483,7 +486,7 @@ export default function CloudsScene() {
           <Scene dials={values} />
         </Canvas>
       )}
-      <CloudsMotif mood={values.mood} summary={readForSky(values.sky).summary} />
+      <CloudsMotif mood={values.mood} summary={readForSky(values.sky).summary} invert={values.invert} />
       <DialRoot position="top-right" theme="dark" productionEnabled />
     </div>
   );
