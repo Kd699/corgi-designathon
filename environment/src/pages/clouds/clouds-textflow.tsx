@@ -15,12 +15,20 @@ const STAGGER = 16;
 
 const CSS = /* css */ `
 .tf { display: inline-block; position: relative; white-space: nowrap; vertical-align: top;
+  /* content-box against the global border-box reset: the width we set is
+     the MEASURED TEXT width; the padding (where the mask fades live) must
+     add around it, not carve the last glyph off the end. */
+  box-sizing: content-box;
   transition: width ${DURATION}ms cubic-bezier(0.22, 1, 0.36, 1);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
-  mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
-  padding: 0.18em 0.12em; margin: -0.18em -0.12em; }
+  /* The fades live entirely in the padding: at rest every glyph — serif
+     ascenders and descenders included — sits in the fully-opaque middle,
+     so nothing reads as clipped. Rolling glyphs (±0.7em) still fade out
+     through the soft ends instead of hard-cutting. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 0.55em, #000 calc(100% - 0.55em), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 0.55em, #000 calc(100% - 0.55em), transparent);
+  padding: 0.75em 0.25em; margin: -0.75em -0.25em; }
 .tf-row { display: inline-block; white-space: pre; }
-.tf-row.tf-out { position: absolute; left: 0.12em; top: 0.18em; }
+.tf-row.tf-out { position: absolute; left: 0.25em; top: 0.75em; }
 .tf-ruler { position: absolute; left: 0; top: 0; visibility: hidden; white-space: pre; pointer-events: none; }
 .tf-ch { display: inline-block; will-change: transform, opacity, filter; }
 .tf-in .tf-ch { animation: tf-in ${DURATION}ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: var(--tf-d, 0ms); }
