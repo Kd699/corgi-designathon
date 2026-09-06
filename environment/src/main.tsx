@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import DailyOpenLab from './pages/DailyOpenLab';
+import { AgentationSidePanelBridge } from './dev/agentation-side-panel-bridge';
 import './index.css';
 
 /* Hash routing, because two surfaces do not justify a router.
@@ -20,4 +21,14 @@ function Root() {
   return hash.startsWith('#/app') ? <App /> : <DailyOpenLab />;
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);
+/* AgentationSidePanelBridge is the review surface: drop a comment on any element and it
+ * goes to the bridge on :4747, which runs one `claude -p` against this checkout and streams
+ * the reply back into the popup. It renders nothing until you open it, and the board works
+ * fine with the bridge down — annotations just queue instead of being acted on.
+ * Opt out entirely with ?spb=0. */
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <Root />
+    <AgentationSidePanelBridge />
+  </StrictMode>,
+);

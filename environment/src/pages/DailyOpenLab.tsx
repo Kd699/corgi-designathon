@@ -19,9 +19,12 @@ import { ALL_CONCEPTS, CONCEPT_CONFIG } from './daily-open/mode-config'
 import { DAILY_OPEN_MODES } from './daily-open/modes'
 import { DAILY_OPEN_COMPONENTS } from './daily-open/component-focus'
 import { SCENARIOS } from './daily-open/scenarios'
+import { WEEK_MODES, WEEK_CONCEPTS, WEEK_CONCEPT_CONFIG } from './daily-open/week-in-review'
+import { WEEK_VIEWS } from './daily-open/week'
 import { STANDARD_WELCOME_HELP } from './_shared/v3artboard-welcome-help'
 
 const mobile = 'mobile' as const
+const web = 'web' as const
 
 /** One frame = one direction under one moment. The only frame shape this board has. */
 const frame = (modeId: string, stateId: string) => ({ modeId, stateId, platform: mobile, rawFrame: true })
@@ -36,7 +39,7 @@ const SPEC = defineV3ArtboardSpec({
       { kbd: 'Components', text: 'The third tab renders each real component on its own, against every scenario palette.' },
     ],
   },
-  modes: DAILY_OPEN_MODES,
+  modes: [...DAILY_OPEN_MODES, ...WEEK_MODES],
   componentFocus: DAILY_OPEN_COMPONENTS,
   componentFocusLayout: 'detail',
   defaults: { viewMode: 'artboard', platform: mobile, zoom: 0.5, frameHeight: 'auto' },
@@ -82,9 +85,50 @@ const SPEC = defineV3ArtboardSpec({
         },
       })),
     },
+    // The week screen is a different surface with a different job — desktop, paged, one
+    // card at a time — so it gets its own section rather than a third cut of the same
+    // sixteen frames.
+    {
+      sectionLabel: 'Week in review (desktop)',
+      items: WEEK_CONCEPTS.map((id) => ({
+        id: `week-${id}`,
+        label: WEEK_CONCEPT_CONFIG[id].label,
+        description: WEEK_CONCEPT_CONFIG[id].thesis,
+        options: [{ modeId: id, stateId: WEEK_VIEWS[0].id, platform: web, platformLabel: 'D' }],
+        subgroup: {
+          label: 'Cards',
+          items: WEEK_VIEWS.map((v) => ({
+            id: `week-${id}-${v.id}`,
+            label: v.label,
+            description: v.headline,
+            options: [{ modeId: id, stateId: v.id, platform: web, platformLabel: 'D' }],
+          })),
+        },
+      })),
+    },
   ],
 
   artboard: [
+    // The week screen, three concepts deep. One row per concept so a direction reads as a
+    // sequence of cards — which is how it is actually used — rather than a grid to scan.
+    ...WEEK_CONCEPTS.map((id, ci) => ({
+      id: `week-${id}`,
+      divider: 'thick' as const,
+      flowBadge: { label: 'Week in review' },
+      title: WEEK_CONCEPT_CONFIG[id].label,
+      description: ci === 0
+        ? `${WEEK_CONCEPT_CONFIG[id].thesis} Arrows, dots and Play all work in the viewer; board frames are frozen on the card they name.`
+        : WEEK_CONCEPT_CONFIG[id].thesis,
+      steps: WEEK_VIEWS.map((v, i) => ({
+        badge: i + 1,
+        title: v.label,
+        description: ci === 0 ? v.headline : undefined,
+        // No maxWidth: these are desktop frames (1440 wide), so any cap narrower than the
+        // frame makes the frame spill out of its step and overlap the next one.
+        arrowAfter: true as const,
+        frames: [{ modeId: id, stateId: v.id, platform: web, rawFrame: true, fitHeight: true }],
+      })),
+    })),
     // Rows are moments so the four directions sit side by side under identical signals.
     // Only the first row carries each thesis — repeating it under all sixteen frames is noise.
     ...SCENARIOS.map((s, row) => ({
@@ -138,6 +182,11 @@ const SPEC = defineV3ArtboardSpec({
       'Signals go through the real derive(); the real components render the result.',
       'A frame cannot claim behaviour the product does not have.',
       'Artboard frames are pointer-events-none, so a grid frame stays pinned to the scenario it is labelled with.',
+    ] },
+    { tone: 'warn', title: 'Week in review — open', items: [
+      'Placement is the question: does the weather own the screen (W1), sit in a frame (W2), or split into seven day-tiles (W3)?',
+      'The cards are data in week.ts — adding or rewording one never touches a concept.',
+      'Play cycles on a 3.2s timer. Nothing else on the week screen is wired.',
     ] },
     { tone: 'info', title: 'How this runs', items: [
       'npm install && npm run dev — the board is the landing page, no other setup.',

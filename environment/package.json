@@ -4,13 +4,16 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --port 5300",
+    "dev": "bash scripts/dev-all.sh",
     "build": "vite build",
     "preview": "vite preview --port 5300",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev:app": "vite --port 5300",
+    "postinstall": "node scripts/apply-agentation-patch.mjs || true"
   },
   "dependencies": {
+    "agentation": "^3.0.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^5.0.2"

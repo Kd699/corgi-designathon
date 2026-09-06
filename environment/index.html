@@ -10,6 +10,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- Agentation Send guard: a plain classic script, so it loads before the app bundle
+         and Vite's HMR can never detach it. If the toolbar's own Send handler dies, this
+         still gets your annotation to the bridge. See public/agentation-send-guard.js. -->
+    <script src="/agentation-send-guard.js"></script>
   </head>
   <body>
     <div id="root"></div>

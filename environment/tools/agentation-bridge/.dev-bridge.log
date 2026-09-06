@@ -1,0 +1,2 @@
+[bridge] v4 on :4747 — cwd=/private/tmp/claude-502/tdo gate=off
+[agentation-bridge v4-oneshot] listening on :4747, cwd=/private/tmp/claude-502/tdo, concurrency=3, claudeBin=/Users/mhlengi/.local/bin/claude
