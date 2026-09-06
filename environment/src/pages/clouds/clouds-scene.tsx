@@ -124,6 +124,66 @@ class HorizonWashEffect extends Effect {
   }
 }
 
+// THE DAY NAV. A small pill fixed top-centre: "Today", with a back arrow
+// that steps the SESSIONS VIEW to the previous day (and a forward arrow to
+// walk home). The sky and the motif stay live — only the list below is
+// day-scoped, and a past day opens with its own grouped read on top.
+const DAY_NAV_CSS = /* css */ `
+.cn { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 30; pointer-events: auto;
+  display: flex; align-items: center; gap: 2px; padding: 4px 6px; border-radius: 999px;
+  background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.32);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; color: #fff; }
+.cn-btn { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+  border: none; border-radius: 999px; padding: 0; background: transparent; color: inherit; cursor: pointer;
+  transition: background 140ms ease; }
+.cn-btn:hover { background: rgba(255,255,255,0.18); }
+.cn-btn:disabled { opacity: 0.28; cursor: default; background: transparent; }
+.cn-label { min-width: 86px; text-align: center; font-size: 13px; letter-spacing: 0.02em; user-select: none; }
+/* On the inverted (white) page the pill goes dark-on-light. */
+.cn[data-invert="true"] { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.18); color: #111; }
+.cn[data-invert="true"] .cn-btn:hover { background: rgba(0,0,0,0.08); }
+`;
+
+/** offset days back from today → what the pill says. */
+function dayLabel(offset: number, day: Date): string {
+  if (offset === 0) return "Today";
+  if (offset === 1) return "Yesterday";
+  return day.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+}
+
+function DayNav({
+  offset,
+  day,
+  canBack,
+  inverted,
+  onStep,
+}: {
+  offset: number;
+  day: Date;
+  canBack: boolean;
+  inverted: boolean;
+  onStep: (delta: number) => void;
+}) {
+  const chevron = (dir: 1 | -1) => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ transform: dir === 1 ? "scaleX(-1)" : undefined }}>
+      <path d="M8.8 2.8 4.6 7l4.2 4.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+  return (
+    <nav className="cn" data-invert={inverted ? "true" : "false"} aria-label="Day">
+      <style>{DAY_NAV_CSS}</style>
+      <button className="cn-btn" type="button" onClick={() => onStep(1)} disabled={!canBack} aria-label="Previous day">
+        {chevron(-1)}
+      </button>
+      <span className="cn-label">{dayLabel(offset, day)}</span>
+      <button className="cn-btn" type="button" onClick={() => onStep(-1)} disabled={offset === 0} aria-label="Next day">
+        {chevron(1)}
+      </button>
+    </nav>
+  );
+}
+
 /** Solar time → a real Date for Atmosphere.updateByDate. The sun's direction
  *  comes from the date, so "1pm at longitude 30°E" must be handed over as
  *  11am UTC — hours minus longitude/15. Fixed to midsummer 2026 because only
@@ -533,6 +593,47 @@ export default function CloudsScene() {
     };
   }, [history, setValue]);
 
+  // THE DAY IN VIEW. The top nav steps the sessions view back a day at a
+  // time; the sky and the motif stay today's. A past day gets its own
+  // grouped read (summariseDay again) above its cards, cached per day so
+  // walking back and forth doesn't re-ask.
+  const [dayOffset, setDayOffset] = useState(0);
+  const viewedDay = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - dayOffset);
+    return d;
+  }, [dayOffset]);
+  const dayItems = useMemo(
+    () => history.filter((h) => new Date(h.at).toDateString() === viewedDay.toDateString()),
+    [history, viewedDay]
+  );
+  // Back is live while anything older than the viewed day exists.
+  const canBack = useMemo(() => {
+    const dayStart = new Date(viewedDay);
+    dayStart.setHours(0, 0, 0, 0);
+    return history.some((h) => new Date(h.at) < dayStart);
+  }, [history, viewedDay]);
+  const [dayReads, setDayReads] = useState<Record<string, DayPicture>>({});
+  const askedDays = useRef(new Set<string>());
+  useEffect(() => {
+    if (dayOffset === 0 || dayItems.length === 0) return;
+    const key = viewedDay.toDateString();
+    if (askedDays.current.has(key)) return;
+    askedDays.current.add(key);
+    summariseDay(dayItems).then((p) => setDayReads((prev) => ({ ...prev, [key]: p })));
+  }, [dayOffset, dayItems, viewedDay]);
+  const dayRead = dayOffset > 0 ? dayReads[viewedDay.toDateString()] ?? null : null;
+  // Stepping into a past day brings its sessions into view — the summary
+  // lives down there, and a click that changes nothing on screen reads as
+  // a dead button.
+  useEffect(() => {
+    if (dayOffset === 0) return;
+    const id = requestAnimationFrame(() => {
+      document.querySelector(".ch")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [dayOffset]);
+
   // Scrolling into the history fades the motif — shape, greeting, read —
   // while the sky (a fixed canvas) stays exactly where it is. One CSS var,
   // written on scroll, read by .cm-stage.
@@ -651,12 +752,24 @@ export default function CloudsScene() {
         neutral={history.length === 0 && !session}
         onLive={setVoiceLive}
       />
-      {/* The history steps aside while a voice session is live — the
-          white page belongs to the tracker and its stream. */}
+      {/* The day nav and history step aside while a voice session is live —
+          the white page belongs to the tracker and its stream. */}
+      {!voiceLive && (history.length > 0 || dayOffset > 0) && (
+        <DayNav
+          offset={dayOffset}
+          day={viewedDay}
+          canBack={canBack}
+          inverted={values.invert}
+          onStep={(delta) => setDayOffset((o) => Math.max(0, o + delta))}
+        />
+      )}
       {!voiceLive && (
         <SessionHistory
-          items={history}
+          items={dayItems}
           inverted={values.invert}
+          title={dayOffset === 0 ? "Sessions" : dayLabel(dayOffset, viewedDay)}
+          lead={dayRead ? dayRead.text : null}
+          emptyNote={dayOffset > 0 ? "Nothing logged this day." : null}
           onDelete={(at) =>
             setHistory((prev) => {
               const next = prev.filter((item) => item.at !== at);

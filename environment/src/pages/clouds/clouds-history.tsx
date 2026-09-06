@@ -49,6 +49,9 @@ const CSS = /* css */ `
   display: flex; flex-direction: column; font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; color: #fff; }
 .ch-title { margin: 0 0 16px 6px; font-family: 'PP Editorial Old', ui-serif, Georgia, serif; font-weight: 400; font-size: 20px; opacity: 0.9; }
 .ch-count { font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; font-size: 12px; opacity: 0.7; margin-left: 10px; letter-spacing: 0.06em; }
+/* The day's read, when a past day is open: one grouped paragraph above its
+   cards — the same summariseDay voice that dresses the motif for today. */
+.ch-lead { margin: -6px 6px 20px; font-size: 14px; line-height: 1.7; opacity: 0.88; }
 /* Each entry: a wrapper that owns the swipe and the collapse, a Delete
    layer behind, the card on top. touch-action pan-y: vertical scrolling
    stays native, horizontal drags are ours. */
@@ -194,21 +197,35 @@ export default function SessionHistory({
   items,
   inverted,
   onDelete,
+  title = "Sessions",
+  lead = null,
+  emptyNote = null,
 }: {
   items: HistoryItem[];
   inverted: boolean;
   /** Swipe a card off (right to left) and it leaves the list — the scene
    *  owns the state and writes localStorage through saveHistory. */
   onDelete: (at: string) => void;
+  /** The day the list is showing — "Sessions" for today, the day's name
+   *  when the top nav has stepped back (clouds-scene.tsx owns the day). */
+  title?: string;
+  /** A past day's grouped read (clouds-session.ts summariseDay), shown
+   *  above its cards. */
+  lead?: string | null;
+  /** With this set, an empty day still renders — the note instead of
+   *  nothing, so stepping back to a quiet day answers rather than blanks. */
+  emptyNote?: string | null;
 }) {
-  if (items.length === 0) return null;
+  if (items.length === 0 && !emptyNote) return null;
   return (
     <section className="ch" data-invert={inverted ? "true" : "false"} aria-label="Session history">
       <style>{CSS}</style>
       <h2 className="ch-title">
-        Sessions
-        <span className="ch-count">{items.length}</span>
+        {title}
+        {items.length > 0 && <span className="ch-count">{items.length}</span>}
       </h2>
+      {lead && <p className="ch-lead">{lead}</p>}
+      {items.length === 0 && emptyNote && <p className="ch-empty">{emptyNote}</p>}
       {items
         .slice()
         .reverse()
