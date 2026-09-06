@@ -15,7 +15,7 @@
 // the clouds route doesn't depend on the motif app's stylesheet. Mood
 // morphs use CSS d: path() transitions (Chromium; other engines snap).
 
-import type { CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import type { ReadSegment } from "./clouds-signals";
 
 export type MotifMood = "Content" | "Excited" | "Tense" | "Weary" | "Asleep";
@@ -43,13 +43,14 @@ type FaceSpec = {
 
 // deriveButtons() evaluated at each expression's home ground:
 // Excited (v .8, a .9), Tense (v -.7, a .85), Content (v .6, a .3),
-// Weary (v -.6, a .25), Asleep (idle, calm middle).
+// Weary (v -.6, a .25), Asleep (idle, calm middle). Eye heights run taller
+// than the study's — long rounded capsules, the Grok-companion read.
 const SPECS: Record<MotifMood, FaceSpec> = {
-  Excited: { pleasant: 0.9, energy: 0.9, eyeHeight: 18, eyeTilt: -15, mouthCurve: 10.5, browTilt: 20, browOpacity: 0, blinkSeconds: 3.75, gazePixels: 3.7, asleep: false },
-  Tense: { pleasant: 0.15, energy: 0.85, eyeHeight: 17.5, eyeTilt: 19, mouthCurve: -8.5, browTilt: 20, browOpacity: 0.6, blinkSeconds: 3.9, gazePixels: 3.6, asleep: false },
-  Content: { pleasant: 0.8, energy: 0.3, eyeHeight: 12, eyeTilt: -10, mouthCurve: 5.7, browTilt: -20, browOpacity: 0, blinkSeconds: 5.25, gazePixels: 1.9, asleep: false },
-  Weary: { pleasant: 0.2, energy: 0.25, eyeHeight: 11.5, eyeTilt: 14, mouthCurve: -5.7, browTilt: -20, browOpacity: 0.5, blinkSeconds: 5.4, gazePixels: 1.75, asleep: false },
-  Asleep: { pleasant: 0.5, energy: 0.05, eyeHeight: 3, eyeTilt: 0, mouthCurve: 0, browTilt: -20, browOpacity: 0, blinkSeconds: 6, gazePixels: 0, asleep: true },
+  Excited: { pleasant: 0.9, energy: 0.9, eyeHeight: 27, eyeTilt: -12, mouthCurve: 10.5, browTilt: 20, browOpacity: 0, blinkSeconds: 3.75, gazePixels: 3.7, asleep: false },
+  Tense: { pleasant: 0.15, energy: 0.85, eyeHeight: 25, eyeTilt: 15, mouthCurve: -8.5, browTilt: 20, browOpacity: 0.6, blinkSeconds: 3.9, gazePixels: 3.6, asleep: false },
+  Content: { pleasant: 0.8, energy: 0.3, eyeHeight: 22, eyeTilt: -8, mouthCurve: 5.7, browTilt: -20, browOpacity: 0, blinkSeconds: 5.25, gazePixels: 1.9, asleep: false },
+  Weary: { pleasant: 0.2, energy: 0.25, eyeHeight: 17, eyeTilt: 11, mouthCurve: -5.7, browTilt: -20, browOpacity: 0.5, blinkSeconds: 5.4, gazePixels: 1.75, asleep: false },
+  Asleep: { pleasant: 0.5, energy: 0.05, eyeHeight: 3.5, eyeTilt: 0, mouthCurve: 0, browTilt: -20, browOpacity: 0, blinkSeconds: 6, gazePixels: 0, asleep: true },
 };
 
 /** The study's outline() (buttonSpec.ts, index 0), as an SVG path in the
@@ -81,7 +82,10 @@ const CSS = /* css */ `
 .cm-motif .cm-brows, .cm-motif .cm-brows path, .cm-motif .cm-eye-tilt { transition: opacity 700ms ease, transform 700ms ease; }
 .cm-motif .cm-blink { transform-box: fill-box; transform-origin: center; animation: cm-blink var(--cm-blink-duration) ease-in-out infinite; }
 .cm-motif .cm-gaze { animation: cm-glance 8s ease-in-out infinite; }
+.cm-motif .cm-track { transform: translate(var(--cm-track-x, 0px), var(--cm-track-y, 0px)); transition: transform 160ms ease-out; }
+.cm-motif[data-tracking="true"] .cm-gaze { animation-play-state: paused; }
 .cm-motif.cm-asleep .cm-blink, .cm-motif.cm-asleep .cm-gaze { animation: none; }
+.cm-motif.cm-asleep .cm-track { transform: none; }
 @keyframes cm-blink { 0%,40%,46%,100% { transform: scaleY(1); } 43% { transform: scaleY(.1); } }
 @keyframes cm-glance { 0%,25%,70%,100% { transform: translate(0,0); } 35%,50% { transform: translate(var(--cm-gaze-distance),-1px); } 80%,90% { transform: translate(calc(-1 * var(--cm-gaze-distance)),0); } }
 @media (prefers-reduced-motion: reduce) {
@@ -108,10 +112,43 @@ export default function CloudsMotif({
     "--cm-blink-duration": `${face.blinkSeconds}s`,
     "--cm-gaze-distance": `${face.gazePixels}px`,
   } as CSSProperties;
+
+  // The eyes follow the pointer: each move writes the offset (clamped, in
+  // viewBox units) onto CSS vars the cm-track group translates by — direct
+  // style writes, zero re-renders. Moving pauses the idle glance; after
+  // 2.5s of stillness the eyes drift back to centre and the glance
+  // resumes. The overlay is pointer-events-none, so the window feeds it.
+  const svgRef = useRef<SVGSVGElement>(null);
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onMove = (e: PointerEvent) => {
+      const r = svg.getBoundingClientRect();
+      const dx = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (r.width / 2)));
+      const dy = Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height / 2)) / (r.height / 2)));
+      svg.style.setProperty("--cm-track-x", `${(dx * 6.5).toFixed(2)}px`);
+      svg.style.setProperty("--cm-track-y", `${(dy * 4).toFixed(2)}px`);
+      svg.dataset.tracking = "true";
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        svg.style.setProperty("--cm-track-x", "0px");
+        svg.style.setProperty("--cm-track-y", "0px");
+        svg.dataset.tracking = "false";
+      }, 2500);
+    };
+    window.addEventListener("pointermove", onMove);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      clearTimeout(timer);
+    };
+  }, []);
+
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
       <style>{CSS}</style>
       <svg
+        ref={svgRef}
         className={`cm-motif${face.asleep ? " cm-asleep" : ""}`}
         data-expression={mood}
         viewBox="0 0 100 100"
@@ -127,14 +164,18 @@ export default function CloudsMotif({
             <g className="cm-cutout" transform="translate(14 14) scale(0.72)">
               <g className="cm-gaze">
                 <g className="cm-brows" style={{ opacity: face.browOpacity }}>
-                  <path d="M 30 28 L 42 28" style={{ transform: `rotate(${face.browTilt}deg)`, transformOrigin: "36px 28px" }} />
-                  <path d="M 58 28 L 70 28" style={{ transform: `rotate(${-face.browTilt}deg)`, transformOrigin: "64px 28px" }} />
+                  <path d="M 30 25 L 42 25" style={{ transform: `rotate(${face.browTilt}deg)`, transformOrigin: "36px 25px" }} />
+                  <path d="M 58 25 L 70 25" style={{ transform: `rotate(${-face.browTilt}deg)`, transformOrigin: "64px 25px" }} />
                 </g>
-                <g className="cm-eye-tilt" style={{ transform: `rotate(${face.eyeTilt}deg)`, transformOrigin: "36px 44px" }}>
-                  <g className="cm-blink"><rect className="cm-eye" x="31.5" y={44 - face.eyeHeight / 2} width="9" height={face.eyeHeight} rx="4.5" /></g>
-                </g>
-                <g className="cm-eye-tilt" style={{ transform: `rotate(${-face.eyeTilt}deg)`, transformOrigin: "64px 44px" }}>
-                  <g className="cm-blink"><rect className="cm-eye" x="59.5" y={44 - face.eyeHeight / 2} width="9" height={face.eyeHeight} rx="4.5" /></g>
+                {/* The eyes alone ride cm-track — long round capsules that
+                    swivel after the pointer, Grok-companion style. */}
+                <g className="cm-track">
+                  <g className="cm-eye-tilt" style={{ transform: `rotate(${face.eyeTilt}deg)`, transformOrigin: "36px 44px" }}>
+                    <g className="cm-blink"><rect className="cm-eye" x="30.5" y={44 - face.eyeHeight / 2} width="11" height={face.eyeHeight} rx="5.5" /></g>
+                  </g>
+                  <g className="cm-eye-tilt" style={{ transform: `rotate(${-face.eyeTilt}deg)`, transformOrigin: "64px 44px" }}>
+                    <g className="cm-blink"><rect className="cm-eye" x="58.5" y={44 - face.eyeHeight / 2} width="11" height={face.eyeHeight} rx="5.5" /></g>
+                  </g>
                 </g>
                 <path
                   className="cm-mouth"
