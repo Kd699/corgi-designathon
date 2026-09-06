@@ -128,11 +128,31 @@ function piecesFor(phase: MorphPhase): Piece[] {
   return SEED_PIECES;
 }
 
-/** Dock every free piece whose widget has data, in the order they were added. */
-function dockEarned(pieces: Piece[], surface: WidgetId[]): Piece[] {
+/* Where a widget the model brought in waits if the edges are full: parked around the
+ * page, not stacked on one spot. Cycles through the corners in library order. */
+const PARK: { x: number; y: number }[] = [
+  { x: 40, y: 40 }, { x: STAGE.w - FREE.horizontal.w - 40, y: 40 },
+  { x: 40, y: STAGE.h - FREE.vertical.h - 40 }, { x: STAGE.w - FREE.vertical.w - 40, y: STAGE.h - FREE.vertical.h - 40 },
+];
+
+/**
+ * Compose the page the way the model said. Every widget it surfaced is on the stage
+ * afterwards — the ones already there are docked, the ones it brought in are created and
+ * docked in the model's order — and pieces for widgets it dropped come off the edges, so the
+ * page reads as the model's board, not the user's earlier guesses. Beyond the eight docking
+ * slots a widget waits parked; nothing is silently discarded.
+ */
+function dockEarned(pieces: Piece[], surface: WidgetId[], nextId: () => number): Piece[] {
+  const onStage = new Set(pieces.map((p) => p.widget));
+  const brought: Piece[] = surface
+    .filter((w) => !onStage.has(w))
+    .map((w, i) => ({ id: nextId(), widget: w, axis: AXIS[w], edge: null, ...PARK[i % PARK.length] }));
+  const all = [...pieces, ...brought].map((p) => (p.edge && !surface.includes(p.widget) ? { ...p, edge: null } : p));
+  // Dock in the model's order, so the first thing it named gets the first slot.
+  const rank = (p: Piece) => { const i = surface.indexOf(p.widget); return i < 0 ? 99 : i; };
   const counts = { top: 0, bottom: 0, left: 0, right: 0 };
-  for (const p of pieces) if (p.edge) counts[p.edge]++;
-  return pieces.map((p) => {
+  for (const p of all) if (p.edge) counts[p.edge]++;
+  const docked = [...all].sort((a, b2) => rank(a) - rank(b2)).map((p) => {
     if (p.edge || !surface.includes(p.widget)) return p;
     // The emptier edge of the pair, so four widgets wrap the page rather than piling up
     // on one side of it.
@@ -142,6 +162,8 @@ function dockEarned(pieces: Piece[], surface: WidgetId[]): Piece[] {
     counts[edge]++;
     return { ...p, edge };
   });
+  // Back to stage order, so React keys stay stable and nothing remounts.
+  return all.map((p) => docked.find((d) => d.id === p.id)!);
 }
 
 /* ── the board ────────────────────────────────────────────────────────── */
@@ -218,9 +240,11 @@ export function MorphBoard({ seed = '', phase = 'blank' }: { seed?: string; phas
     committed.current = reply.day;
     setDay(reply.day);
     setSurface(reply.surface);
-    // The beat the whole surface exists for: what earned its place docks into the page.
-    setPieces((ps) => dockEarned(ps, reply.surface));
-    setMessage(`Sent. Every widget with something to show has locked to the page.${reply.say ? ` — ${reply.say}` : ''}`);
+    // The beat the whole surface exists for: the page becomes the model's composition —
+    // what it surfaced arrives and docks, what it dropped lets go.
+    const chosen = reply.surface;
+    setPieces((ps) => dockEarned(ps, chosen, () => next.current++));
+    setMessage(`Sent. ${chosen.length} widget${chosen.length === 1 ? '' : 's'} chosen and docked to the page.${reply.say ? ` — ${reply.say}` : ''}`);
   }, [text]);
 
   /* ── drag / dock / release: his handlers, widget-shaped ─────────────── */
