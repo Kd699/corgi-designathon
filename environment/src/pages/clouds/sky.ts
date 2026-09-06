@@ -154,6 +154,18 @@ export function paletteForHour(hour: number, out: SkyPalette) {
   out.tint.copy(before.tint).lerp(after.tint, s);
 }
 
+/** The preset's palette as CSS colours, plus whether it's light enough to
+ *  need dark type — for DOM that echoes the sky (the voice bubbles in
+ *  clouds-motif.tsx). Palettes are display-referred (raw() above), so they
+ *  read back out with NO colour-space conversion. */
+export function cssPaletteFor(sky: SkyPresetName | "Live"): { top: string; mid: string; bot: string; light: boolean } {
+  const out: SkyPalette = { top: new Color(), mid: new Color(), bot: new Color(), tint: new Color() };
+  paletteForHour(sky === "Live" ? liveSky().hour : SKY_PRESETS[sky].hour, out);
+  const hex = (c: Color) => `#${c.getHexString("srgb-linear")}`;
+  const luma = 0.299 * out.mid.r + 0.587 * out.mid.g + 0.114 * out.mid.b;
+  return { top: hex(out.top), mid: hex(out.mid), bot: hex(out.bot), light: luma > 0.6 };
+}
+
 // The panel's shape, shared so either engine can be handed the same dials.
 export interface CloudDials {
   engine: "Volumetric" | "Wisps";

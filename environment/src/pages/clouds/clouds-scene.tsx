@@ -488,7 +488,7 @@ export default function CloudsScene() {
           <Scene dials={values} />
         </Canvas>
       )}
-      <CloudsMotif mood={values.mood} summary={readForSky(values.sky).summary} invert={values.invert} smile={values.smile} />
+      <CloudsMotif mood={values.mood} summary={readForSky(values.sky).summary} sky={values.sky} invert={values.invert} smile={values.smile} />
       <DialRoot position="top-right" theme="dark" productionEnabled />
     </div>
   );

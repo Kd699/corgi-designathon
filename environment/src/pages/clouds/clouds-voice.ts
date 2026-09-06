@@ -10,11 +10,12 @@ import { getAudioContext, playVoiceStart, playVoiceEnd, playWidgetAppear } from 
 import { WIDGET_TRIGGERS, type WidgetKind } from "./clouds-widgets";
 
 // Chrome ships this prefixed and the DOM lib omits it entirely.
+type SRResult = ArrayLike<{ transcript: string }> & { isFinal: boolean };
 type SpeechRecognitionLike = {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onresult: ((e: { results: ArrayLike<SRResult> }) => void) | null;
   onend: (() => void) | null;
   start(): void;
   stop(): void;
@@ -28,7 +29,10 @@ function makeRecognition(): SpeechRecognitionLike | null {
 
 export function useVoice() {
   const [listening, setListening] = useState(false);
-  const [transcript, setTranscript] = useState("");
+  /** Finalised utterances, one bubble each. */
+  const [chunks, setChunks] = useState<string[]>([]);
+  /** The utterance still forming — the live bubble at the stream's end. */
+  const [interim, setInterim] = useState("");
   const [widgets, setWidgets] = useState<WidgetKind[]>([]);
   const [supported, setSupported] = useState(true);
 
@@ -52,7 +56,8 @@ export function useVoice() {
   const start = useCallback(async () => {
     listeningRef.current = true;
     setListening(true);
-    setTranscript("");
+    setChunks([]);
+    setInterim("");
     setWidgets([]);
     matchedRef.current = new Set();
     playVoiceStart();
@@ -64,10 +69,22 @@ export function useVoice() {
       rec.interimResults = true;
       rec.lang = navigator.language || "en-US";
       rec.onresult = (e) => {
-        const text = Array.from(e.results, (r) => r[0].transcript).join(" ");
-        setTranscript(text);
+        // Chunking is the recogniser's own utterance segmentation: each
+        // finalised result is a settled bubble, the interim tail is the
+        // live one still rewriting itself.
+        const finals: string[] = [];
+        let live = "";
+        for (const r of Array.from(e.results)) {
+          const text = r[0].transcript.trim();
+          if (!text) continue;
+          if (r.isFinal) finals.push(text);
+          else live = live ? `${live} ${text}` : text;
+        }
+        setChunks(finals);
+        setInterim(live);
+        const all = `${finals.join(" ")} ${live}`;
         for (const kind of Object.keys(WIDGET_TRIGGERS) as WidgetKind[]) {
-          if (!matchedRef.current.has(kind) && WIDGET_TRIGGERS[kind].test(text)) {
+          if (!matchedRef.current.has(kind) && WIDGET_TRIGGERS[kind].test(all)) {
             matchedRef.current.add(kind);
             setWidgets((prev) => [...prev, kind]);
             playWidgetAppear();
@@ -136,5 +153,5 @@ export function useVoice() {
     };
   }, [stopInternals]);
 
-  return { listening, transcript, widgets, supported, toggle, levelHostRef };
+  return { listening, chunks, interim, widgets, supported, toggle, levelHostRef };
 }

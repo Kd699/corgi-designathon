@@ -15,8 +15,9 @@
 // the clouds route doesn't depend on the motif app's stylesheet. Mood
 // morphs use CSS d: path() transitions (Chromium; other engines snap).
 
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import type { ReadSegment } from "./clouds-signals";
+import { cssPaletteFor, type SkyPresetName } from "./sky";
 import { useVoice } from "./clouds-voice";
 import { WidgetRow } from "./clouds-widgets";
 
@@ -88,7 +89,10 @@ function circlePath(): string {
 const CSS = /* css */ `
 .cm-wrap { position: relative; width: min(30vmin, 240px); height: min(30vmin, 240px); pointer-events: auto; cursor: pointer; }
 .cm-motif { position: relative; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.cm-motif .cm-shape { fill: #fff; transition: d 700ms ease; }
+.cm-motif .cm-shape { fill: #fff; transition: d 700ms ease, opacity 500ms ease; }
+.cm-motif .cm-sheet { transition: opacity 500ms ease; }
+.cm-motif[data-invert="true"] .cm-shape { opacity: 0; }
+.cm-motif:not([data-invert="true"]) .cm-sheet { opacity: 0; }
 .cm-motif .cm-hole { fill: #000; transition: d 700ms ease; }
 .cm-motif .cm-cutout { color: #000; }
 .cm-motif .cm-ink { color: #fff; }
@@ -119,11 +123,19 @@ const CSS = /* css */ `
 [data-invert="true"] .cm-mood-label { color: #1e2a3a; }
 [data-invert="true"] .cm-read { color: rgba(24,36,54,0.88); text-shadow: none; }
 [data-invert="true"] .cm-pill { background: rgba(24,36,54,0.06); border-color: rgba(24,36,54,0.28); }
+/* The voice stream: each settled utterance is a bubble cut in the sky's
+   own palette; the last one rewrites itself live as you speak. */
+.cm-bubbles { display: flex; flex-direction: column; align-items: center; gap: 9px; margin-top: 1em; max-width: min(80vmin, 520px); padding: 0 16px; }
+.cm-bubble { padding: 10px 22px; font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; font-weight: 400; font-size: 14px; line-height: 1.55; text-align: center; animation: cm-bub 420ms cubic-bezier(0.2, 1.3, 0.4, 1) both; }
+.cm-bubble-live { opacity: 0.82; }
+@keyframes cm-bub { from { opacity: 0; transform: translateY(10px) scale(0.9); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .cm-bubble { animation: none; } }
 `;
 
 export default function CloudsMotif({
   mood,
   summary,
+  sky = "Midday",
   invert = false,
   smile = false,
 }: {
@@ -131,6 +143,8 @@ export default function CloudsMotif({
   /** The read behind the mood (clouds-signals.ts) — signal citations
    *  arrive as { pill } segments and render as chips in the line. */
   summary?: ReadSegment[];
+  /** The active sky preset — the voice bubbles wear its palette. */
+  sky?: SkyPresetName | "Live";
   /** Invert the page: a white sheet covers the sky, which shows only
    *  through the blob — with the face restored in white inside it. The
    *  exact negative of the normal white-body / sky-face look. */
@@ -144,7 +158,11 @@ export default function CloudsMotif({
   // level bars, and the transcript pulls WHOOP widgets out as keywords
   // land (clouds-voice.ts / clouds-widgets.tsx).
   const voice = useVoice();
+  // Voice always speaks on the white page: listening forces the inverted
+  // layout — sky masked into the shape — whatever the dial says.
+  const inverted = invert || voice.listening;
   const blob = voice.listening ? circlePath() : blobPath(face.pleasant, face.energy);
+  const palette = useMemo(() => cssPaletteFor(sky), [sky]);
   const style = {
     "--cm-blink-duration": `${face.blinkSeconds}s`,
     "--cm-gaze-distance": `${face.gazePixels}px`,
@@ -232,8 +250,23 @@ export default function CloudsMotif({
     </g>
   );
 
+  // Each bubble is cut in the current sky's palette and takes an organic,
+  // per-index border — scallopier when the mood is pleasant-energetic,
+  // just like the blob itself.
+  const bubbleStyle = (i: number): CSSProperties => {
+    const amp = 6 + 12 * face.energy;
+    const r = (k: number) => `${Math.round(55 + Math.sin(i * 12.9898 + k * 4.233) * amp)}%`;
+    return {
+      background: `linear-gradient(180deg, ${palette.top}, ${palette.mid} 55%, ${palette.bot})`,
+      borderRadius: `${r(0)} ${r(1)} ${r(2)} ${r(3)} / ${r(4)} ${r(5)} ${r(6)} ${r(7)}`,
+      color: palette.light ? "#1e2a3a" : "#fff",
+    };
+  };
+
+  const hasStream = voice.chunks.length > 0 || voice.interim.length > 0;
+
   return (
-    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center" data-invert={invert}>
+    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center" data-invert={inverted}>
       <style>{CSS}</style>
       <div
         ref={voice.levelHostRef}
@@ -247,6 +280,7 @@ export default function CloudsMotif({
           className={`cm-motif${face.asleep ? " cm-asleep" : ""}`}
           data-expression={mood}
           data-voice={voice.listening}
+          data-invert={inverted}
           viewBox="0 0 100 100"
           aria-hidden="true"
           style={style}
@@ -257,66 +291,69 @@ export default function CloudsMotif({
                 scale) punches the features through to the sky. Inverted:
                 the sheet mask keeps a huge white page, the blob cuts the
                 one window onto the sky, and the face (white) is restored
-                inside the window — the exact negative of normal. */}
-            {invert ? (
-              <mask id="cm-motif-mask" maskUnits="userSpaceOnUse" x="-4000" y="-4000" width="8000" height="8000">
-                <rect x="-4000" y="-4000" width="8000" height="8000" fill="#fff" />
-                <path
-                  className="cm-hole"
-                  style={{ d: `path('${blob}')` } as CSSProperties}
-                  d={blob}
-                />
-                {faceGroup("cm-ink")}
-                {barsGroup("cm-ink")}
-              </mask>
-            ) : (
-              <mask id="cm-motif-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
-                <rect width="100" height="100" fill="#fff" />
-                {faceGroup("cm-cutout")}
-                {barsGroup("cm-cutout")}
-              </mask>
-            )}
+                inside the window — the exact negative of normal. Both
+                layers stay mounted so flipping (or starting voice, which
+                forces the sheet) cross-fades instead of jumping. */}
+            <mask id="cm-motif-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+              <rect width="100" height="100" fill="#fff" />
+              {faceGroup("cm-cutout")}
+              {barsGroup("cm-cutout")}
+            </mask>
+            <mask id="cm-sheet-mask" maskUnits="userSpaceOnUse" x="-4000" y="-4000" width="8000" height="8000">
+              <rect x="-4000" y="-4000" width="8000" height="8000" fill="#fff" />
+              <path
+                className="cm-hole"
+                style={{ d: `path('${blob}')` } as CSSProperties}
+                d={blob}
+              />
+              {faceGroup("cm-ink")}
+              {barsGroup("cm-ink")}
+            </mask>
           </defs>
-          {invert ? (
-            // The white sheet: far larger than any viewport (the svg
-            // overflows visibly), holed by the mask so the sky only shows
-            // through the character.
-            <rect x="-4000" y="-4000" width="8000" height="8000" fill="#fff" mask="url(#cm-motif-mask)" />
-          ) : (
-            <path
-              className="cm-shape"
-              mask="url(#cm-motif-mask)"
-              style={{ d: `path('${blob}')` } as CSSProperties}
-              d={blob}
-            />
-          )}
+          {/* The white sheet: far larger than any viewport (the svg
+              overflows visibly), holed by its mask so the sky only shows
+              through the character. */}
+          <rect className="cm-sheet" x="-4000" y="-4000" width="8000" height="8000" fill="#fff" mask="url(#cm-sheet-mask)" />
+          <path
+            className="cm-shape"
+            mask="url(#cm-motif-mask)"
+            style={{ d: `path('${blob}')` } as CSSProperties}
+            d={blob}
+          />
         </svg>
       </div>
       <span className="cm-mood-label">{voice.listening ? "Listening" : mood}</span>
-      {voice.listening ? (
+      {voice.listening && !hasStream && (
         <p className="cm-read">
-          {voice.transcript ? (
-            <span>{voice.transcript}</span>
-          ) : (
-            <span style={{ opacity: 0.65, fontStyle: "italic" }}>
-              {voice.supported
-                ? "talk about your sleep, recovery or strain\u2026"
-                : "speech recognition isn't available in this browser"}
+          <span style={{ opacity: 0.65, fontStyle: "italic" }}>
+            {voice.supported
+              ? "talk about your sleep, recovery or strain\u2026"
+              : "speech recognition isn't available in this browser"}
+          </span>
+        </p>
+      )}
+      {voice.listening && hasStream && (
+        <div className="cm-bubbles">
+          {voice.chunks.map((chunk, i) => (
+            <span key={i} className="cm-bubble" style={bubbleStyle(i)}>{chunk}</span>
+          ))}
+          {voice.interim && (
+            <span className="cm-bubble cm-bubble-live" style={bubbleStyle(voice.chunks.length)}>
+              {voice.interim}
             </span>
           )}
+        </div>
+      )}
+      {!voice.listening && summary && (
+        <p className="cm-read">
+          {summary.map((seg, i) =>
+            typeof seg === "string" ? (
+              <span key={i}>{seg}</span>
+            ) : (
+              <span key={i} className="cm-pill">{seg.pill}</span>
+            )
+          )}
         </p>
-      ) : (
-        summary && (
-          <p className="cm-read">
-            {summary.map((seg, i) =>
-              typeof seg === "string" ? (
-                <span key={i}>{seg}</span>
-              ) : (
-                <span key={i} className="cm-pill">{seg.pill}</span>
-              )
-            )}
-          </p>
-        )
       )}
       <WidgetRow kinds={voice.widgets} />
     </div>
