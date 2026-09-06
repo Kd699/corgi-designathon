@@ -548,7 +548,9 @@ export default function CloudsScene() {
   // "d" hides the whole DialKit dock (the floating circle included) for a
   // clean frame. display:none rather than unmount, so the panel keeps its
   // state. Keys typed into DialKit's own inputs don't count.
-  const [dialsVisible, setDialsVisible] = useState(true);
+  // Hidden by default: /clouds opens as a clean frame; "d" brings the
+  // dials out when you want to tune it.
+  const [dialsVisible, setDialsVisible] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.key !== "d" && e.key !== "D") || e.metaKey || e.ctrlKey || e.altKey) return;
