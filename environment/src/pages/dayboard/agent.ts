@@ -199,7 +199,7 @@ export function surfaceFor(day: DayState): WidgetId[] {
 
 const SYSTEM = `You turn someone's spoken account of their day into a structured board.
 
-Return ONLY JSON matching this shape, no prose around it:
+Return ONLY a JSON object matching this shape — no prose, no code fence, nothing before or after it:
 {
   "day": {
     "headline": string,        // one short line the day IS. Not a summary — a read. No hedging.
@@ -222,7 +222,8 @@ Return ONLY JSON matching this shape, no prose around it:
 Rules:
 - Only include a field you have evidence for. Empty array or null beats invention.
 - "surface" lists ONLY widgets with real data, in the order they should be read. The board is
-  your composition: if the day was all people and no work, lead with people.
+  your composition: if the day was all people and no work, lead with people. The one
+  exception: "read" is always present and always first — the headline is the board's title.
 - Times: infer sensible clock times from ordering words ("after lunch", "first thing").
 - Never moralise, never give advice unless they asked. You are describing, not coaching.`;
 
@@ -251,9 +252,13 @@ export async function think(text: string, base: DayState): Promise<AgentReply> {
   });
   if (!res.ok) throw new Error(`xai ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const json = await res.json();
-  const content = json?.choices?.[0]?.message?.content;
+  const content: string | undefined = json?.choices?.[0]?.message?.content;
   if (!content) throw new Error('xai returned no content');
-  const parsed = JSON.parse(content) as AgentReply;
+  // The Supabase llm-proxy drops response_format, so the model is free to wrap the JSON in a
+  // code fence or a sentence. Take the outermost object and ignore the rest.
+  const start = content.indexOf('{'), end = content.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error(`xai returned no JSON: ${content.slice(0, 120)}`);
+  const parsed = JSON.parse(content.slice(start, end + 1)) as AgentReply;
   const day = apply(base, parsed.day ?? {});
   return {
     day,
