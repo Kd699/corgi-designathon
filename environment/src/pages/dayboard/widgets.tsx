@@ -94,7 +94,9 @@ function Timeline({ day }: { day: DayState }) {
   return (
     <Panel title="Today" hint={total ? mins(total) + ' logged' : undefined} span={2} tall>
       <div className="flex gap-6">
-        <div className="w-28 shrink-0">
+        {/* data-rail: the date column the companion shows beside the rows. A narrow host (a
+            vertical slab on the morph board) hides it rather than squeezing the rows. */}
+        <div className="w-28 shrink-0" data-rail>
           <p className="text-sm font-semibold">Today</p>
           <p className="text-[11px] db-muted">{ev.length} entr{ev.length === 1 ? 'y' : 'ies'}</p>
         </div>

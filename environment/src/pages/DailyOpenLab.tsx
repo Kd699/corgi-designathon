@@ -23,6 +23,7 @@ import { WEEK_MODES, WEEK_CONCEPTS, WEEK_CONCEPT_CONFIG } from './daily-open/wee
 import { WEEK_VIEWS } from './daily-open/week'
 import { WEEK_SKY_MODE, WEEK_SKY_ID, WEEK_SKY_CONFIG } from './daily-open/week-stage-sky'
 import { DAYBOARD_MODE, DAYBOARD_ID, DAYBOARD_CONFIG, DAYBOARD_STATES } from './daily-open/dayboard-mode'
+import { MORPH_MODE, MORPH_ID, MORPH_CONFIG, MORPH_STATES } from './daily-open/morph-board'
 import { STANDARD_WELCOME_HELP } from './_shared/v3artboard-welcome-help'
 
 const mobile = 'mobile' as const
@@ -41,7 +42,7 @@ const SPEC = defineV3ArtboardSpec({
       { kbd: 'Components', text: 'The third tab renders each real component on its own, against every scenario palette.' },
     ],
   },
-  modes: [...DAILY_OPEN_MODES, ...WEEK_MODES, WEEK_SKY_MODE, DAYBOARD_MODE],
+  modes: [...DAILY_OPEN_MODES, ...WEEK_MODES, WEEK_SKY_MODE, DAYBOARD_MODE, MORPH_MODE],
   componentFocus: DAILY_OPEN_COMPONENTS,
   componentFocusLayout: 'detail',
   defaults: { viewMode: 'artboard', platform: mobile, zoom: 0.5, frameHeight: 'auto' },
@@ -144,6 +145,23 @@ const SPEC = defineV3ArtboardSpec({
             options: [{ modeId: DAYBOARD_ID, stateId: st.id, platform: web, platformLabel: 'D' }],
           })),
         },
+      },
+      // D2: the same widgets on Joseph's Shape Lab. States are phases of one account, not
+      // different days — the argument here is the dock-on-send beat, not the composition.
+      {
+        id: `sb-${MORPH_ID}`,
+        label: MORPH_CONFIG.label,
+        description: MORPH_CONFIG.thesis,
+        options: [{ modeId: MORPH_ID, stateId: MORPH_STATES[1].id, platform: web, platformLabel: 'D' }],
+        subgroup: {
+          label: 'Phases',
+          items: MORPH_STATES.map((st) => ({
+            id: `sb-${MORPH_ID}-${st.id}`,
+            label: st.label,
+            description: st.description,
+            options: [{ modeId: MORPH_ID, stateId: st.id, platform: web, platformLabel: 'D' }],
+          })),
+        },
       }],
     },
   ],
@@ -165,6 +183,23 @@ const SPEC = defineV3ArtboardSpec({
         // Alternatives, not a sequence — these are four different days, not four steps.
         arrowAfter: false as const,
         frames: [{ modeId: DAYBOARD_ID, stateId: st.id, platform: web, rawFrame: true, fitHeight: true }],
+      })),
+    },
+    // D2, directly under D1. This row IS a sequence — nothing typed → typing → sent — so the
+    // arrows are earned here where they were not on the D1 row.
+    {
+      id: `board-${MORPH_ID}`,
+      divider: 'thick' as const,
+      flowBadge: { label: 'Dayboard · fork' },
+      title: MORPH_CONFIG.label,
+      description: `${MORPH_CONFIG.thesis} ${MORPH_CONFIG.risk}`,
+      steps: MORPH_STATES.map((st, i) => ({
+        badge: i + 1,
+        title: st.label,
+        description: st.description,
+        maxWidth: 420,
+        arrowAfter: true as const,
+        frames: [{ modeId: MORPH_ID, stateId: st.id, platform: web, rawFrame: true, fitHeight: true }],
       })),
     },
     // The week screen, three concepts deep. One row per concept so a direction reads as a
