@@ -139,7 +139,7 @@ function circlePath(radius = 31): string {
 const CSS = /* css */ `
 .cm-stage { opacity: var(--cm-fade, 1); }
 .cm-wrap { position: relative; width: min(30vmin, 240px); height: min(30vmin, 240px); pointer-events: auto; cursor: pointer; }
-.cm-motif { position: relative; z-index: 1; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.cm-motif { position: relative; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .cm-motif .cm-shape { fill: #fff; transform-origin: 50px 50px; transition: d 560ms cubic-bezier(0.22, 1, 0.36, 1), opacity 420ms ease, transform 420ms ease; }
 .cm-motif .cm-hole { fill: #000; transform-origin: 50px 50px; transition: d 560ms cubic-bezier(0.22, 1, 0.36, 1), transform 420ms ease; }
 .cm-motif .cm-sheet { transition: opacity 420ms ease; }
@@ -199,20 +199,25 @@ const CSS = /* css */ `
 /* Type instead of talk: the same matcher answers the line (widgets, sky,
    then the read). Mid-session it joins the stream. */
 .cm-input { position: relative; pointer-events: auto; margin-top: 1em; width: min(76vmin, 440px); padding: 0 16px; }
-.cm-input input { width: 100%; height: 42px; padding: 0 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.14);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; font: 400 14px 'Work Sans', ui-sans-serif, system-ui, sans-serif; text-align: center; outline: none;
-  transition: border-color 200ms ease, background 200ms ease, color 420ms ease; }
-.cm-input input::placeholder { color: rgba(255,255,255,0.62); font-style: italic; }
-.cm-input input:focus { border-color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.2); }
+.cm-input input { width: 100%; height: 42px; padding: 0 48px 0 20px; border-radius: 999px; border: 1px solid rgba(0,0,0,0.08); background: #fff;
+  color: #111; font: 400 14px 'Work Sans', ui-sans-serif, system-ui, sans-serif; text-align: left; outline: none;
+  box-shadow: 0 2px 14px rgba(10,16,30,0.12); transition: border-color 200ms ease, box-shadow 200ms ease; }
+.cm-input input::placeholder { color: rgba(0,0,0,0.42); font-style: italic; }
+.cm-input input:focus { border-color: rgba(0,0,0,0.22); box-shadow: 0 2px 18px rgba(10,16,30,0.18); }
+/* The send: a blue circle with a white arrow, parked at the pill's end. */
+.cm-send { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 999px; border: none; padding: 0; background: #3478f6; color: #fff; cursor: pointer;
+  transition: background 160ms ease, transform 160ms ease; }
+.cm-send:hover { background: #2b66d9; }
+.cm-send:active { transform: translateY(-50%) scale(0.92); }
+.cm-send:disabled { background: rgba(0,0,0,0.14); cursor: default; }
 .cm-note { position: relative; margin: 0.7em 0 0; font: italic 400 13px 'Work Sans', ui-sans-serif, system-ui, sans-serif; color: rgba(255,255,255,0.72); text-align: center; }
 /* Inverted page: the sheet is white, so the type goes black and grey. */
 [data-invert="true"] .cm-mood-label { color: #111; }
 [data-invert="true"] .cm-read { color: rgba(0,0,0,0.62); text-shadow: none; }
 [data-invert="true"] .cm-pill { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.24); color: rgba(0,0,0,0.72); }
 [data-invert="true"] .cm-sk { background-image: linear-gradient(90deg, rgba(0,0,0,0.06) 0%, rgba(0,0,0,0.16) 50%, rgba(0,0,0,0.06) 100%); }
-[data-invert="true"] .cm-input input { border-color: rgba(0,0,0,0.2); background: rgba(0,0,0,0.04); color: #111; }
-[data-invert="true"] .cm-input input::placeholder { color: rgba(0,0,0,0.45); }
-[data-invert="true"] .cm-input input:focus { border-color: rgba(0,0,0,0.45); background: rgba(0,0,0,0.06); }
+[data-invert="true"] .cm-input input { border-color: rgba(0,0,0,0.14); box-shadow: none; }
 [data-invert="true"] .cm-note { color: rgba(0,0,0,0.52); }
 /* The voice stream: chat bubbles — yours, so they sit right with a small
    tail corner — cut in the sky's own palette; the last one rewrites
@@ -313,15 +318,25 @@ export default function CloudsMotif({
       : blobPath(face.pleasant, face.energy);
   const palette = useMemo(() => cssPaletteFor(sky), [sky]);
 
-  // The reveal circle has to clear the viewport's far corner, measured in
-  // the motif's own 100-unit space.
+  // The reveal circle has to clear the viewport's FARTHEST corner from the
+  // motif's own centre (the copy below pushes it above the middle of the
+  // screen), measured in its 100-unit space.
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [revealRadius, setRevealRadius] = useState(1600);
   useEffect(() => {
     if (!circleReveal) return;
     const measure = () => {
-      const w = wrapRef.current?.getBoundingClientRect().width || 240;
-      setRevealRadius(Math.hypot(window.innerWidth, window.innerHeight) / 2 / (w / 100) + 6);
+      const r = wrapRef.current?.getBoundingClientRect();
+      const w = r?.width || 240;
+      const cx = r ? r.left + r.width / 2 : window.innerWidth / 2;
+      const cy = r ? r.top + r.height / 2 : window.innerHeight / 2;
+      const far = Math.max(
+        Math.hypot(cx, cy),
+        Math.hypot(window.innerWidth - cx, cy),
+        Math.hypot(cx, window.innerHeight - cy),
+        Math.hypot(window.innerWidth - cx, window.innerHeight - cy)
+      );
+      setRevealRadius(far / (w / 100) + 8);
     };
     measure();
     window.addEventListener("resize", measure);
@@ -599,6 +614,12 @@ export default function CloudsMotif({
             autoComplete="off"
             enterKeyHint="send"
           />
+          <button className="cm-send" type="submit" disabled={!draft.trim()} aria-label="Send">
+            {/* An up arrow, the message-send read. */}
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </form>
       )}
     </div>
