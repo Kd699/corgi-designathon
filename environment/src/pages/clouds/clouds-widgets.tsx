@@ -52,6 +52,56 @@ const today = DAYS[DAYS.length - 1];
 /** The live numbers the voice flow can cite, keyed for reuse elsewhere. */
 export const LATEST = today;
 
+// THE RICH ROWS FOR SESSION CARDS (clouds-history.tsx). A card whose text
+// touched sleep, recovery or strain gets that kind's actual numbers from
+// the sample, with today measured against the trailing week — the same
+// relevance regexes that summon the live widgets, run over the read.
+const avgOf = (pick: (d: Day) => number) =>
+  DAYS.slice(0, -1).reduce((sum, d) => sum + pick(d), 0) / (DAYS.length - 1);
+
+const deltaPct = (now: number, avg: number) => Math.round(((now - avg) / avg) * 100);
+
+export type WidgetStat = {
+  kind: WidgetKind;
+  title: string;
+  value: string;
+  sub: string;
+  /** Signed % against the 7-day average — the more-or-less-than-usual read. */
+  delta: number;
+};
+
+const STATS: Record<WidgetKind, WidgetStat> = {
+  sleep: {
+    kind: "sleep",
+    title: "Sleep",
+    value: hm(today.sleepMinutes),
+    sub: `${today.sleepPerformance}% sleep score`,
+    delta: deltaPct(today.sleepMinutes, avgOf((d) => d.sleepMinutes)),
+  },
+  recovery: {
+    kind: "recovery",
+    title: "Recovery",
+    value: `${today.recovery}%`,
+    sub: `HRV ${today.hrv} ms · resting ${today.rhr} bpm`,
+    delta: deltaPct(today.recovery, avgOf((d) => d.recovery)),
+  },
+  activity: {
+    kind: "activity",
+    title: "Strain",
+    value: today.strain.toFixed(1),
+    sub: `${today.kcal.toLocaleString()} kcal · avg ${today.avgHr} bpm`,
+    delta: deltaPct(today.kcal, avgOf((d) => d.kcal)),
+  },
+};
+
+/** The stats a piece of text has earned: the same triggers as the live
+ *  widgets, so a card about sleep carries the sleep numbers under it. */
+export function statsForText(text: string): WidgetStat[] {
+  return (Object.keys(WIDGET_TRIGGERS) as WidgetKind[])
+    .filter((kind) => WIDGET_TRIGGERS[kind].test(text))
+    .map((kind) => STATS[kind]);
+}
+
 function hm(minutes: number): string {
   return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
 }

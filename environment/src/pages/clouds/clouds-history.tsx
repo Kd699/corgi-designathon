@@ -4,8 +4,9 @@
 // (clouds-scene.tsx fixes the canvas); the motif fades as you scroll into
 // this, and the cards scroll up over the sky.
 
-import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useMemo, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { SessionRead } from "./clouds-session";
+import { statsForText } from "./clouds-widgets";
 
 export type HistoryItem = SessionRead & { at: string; sky: string };
 
@@ -72,6 +73,18 @@ const CSS = /* css */ `
 .ch-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(0,0,0,0.6); }
 .ch-heading { margin: 8px 0 4px; font-family: 'PP Editorial Old', ui-serif, Georgia, serif; font-weight: 400; font-size: 23px; line-height: 1.15; }
 .ch-summary { margin: 0; font-size: 14px; line-height: 1.6; color: rgba(0,0,0,0.7); }
+/* Under the response, the numbers it touched: a subtle rule splits the
+   card, then one row per WHOOP kind the text mentioned — the value, its
+   context, and where today sits against the trailing week. */
+.ch-rule { border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 13px 0 11px; }
+.ch-stats { display: flex; flex-direction: column; gap: 8px; }
+.ch-stat { display: flex; align-items: baseline; gap: 9px; }
+.ch-stat-k { min-width: 62px; font-size: 9.5px; letter-spacing: 0.13em; text-transform: uppercase; color: rgba(0,0,0,0.45); }
+.ch-stat-v { font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: #111; }
+.ch-stat-sub { flex: 1; font-size: 11.5px; color: rgba(0,0,0,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-stat-d { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ch-stat-d[data-up="true"] { color: #1f9d55; }
+.ch-stat-d[data-up="false"] { color: #d98200; }
 .ch-empty { opacity: 0.65; font-size: 13px; text-align: center; padding: 12px; }
 /* On the inverted (white) page the title outside the cards goes dark too. */
 .ch[data-invert="true"] { color: #111; }
@@ -104,6 +117,9 @@ const CSS = /* css */ `
 function SwipeableCard({ item, onDelete }: { item: HistoryItem; onDelete: (at: string) => void }) {
   const itemRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLElement>(null);
+  // The WHOOP rows this card has earned: the same triggers that summon the
+  // live widgets, run over what the session actually said.
+  const stats = useMemo(() => statsForText(`${item.heading} ${item.summary}`), [item.heading, item.summary]);
   const drag = useRef({ x: 0, y: 0, dx: 0, active: false, horizontal: null as boolean | null, gone: false });
 
   const setSwipe = (dx: number) => {
@@ -192,6 +208,23 @@ function SwipeableCard({ item, onDelete }: { item: HistoryItem; onDelete: (at: s
         </div>
         <h3 className="ch-heading">{item.heading}</h3>
         <p className="ch-summary">{item.summary}</p>
+        {stats.length > 0 && (
+          <>
+            <hr className="ch-rule" />
+            <div className="ch-stats">
+              {stats.map((s) => (
+                <div className="ch-stat" key={s.kind}>
+                  <span className="ch-stat-k">{s.title}</span>
+                  <span className="ch-stat-v">{s.value}</span>
+                  <span className="ch-stat-sub">{s.sub}</span>
+                  <span className="ch-stat-d" data-up={s.delta >= 0 ? "true" : "false"}>
+                    {s.delta >= 0 ? "\u2191" : "\u2193"} {Math.abs(s.delta)}% vs avg
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </article>
     </div>
   );
