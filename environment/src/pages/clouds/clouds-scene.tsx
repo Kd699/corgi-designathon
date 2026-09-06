@@ -82,6 +82,7 @@ import WispsCanvas from "./clouds-wisps";
 import CloudsMotif, { MOTIF_MOODS } from "./clouds-motif";
 import SessionHistory, { loadHistory, saveHistory, type HistoryItem } from "./clouds-history";
 import type { SessionRead } from "./clouds-session";
+import { THEME_SKY } from "./clouds-voice";
 import { moodForSky, readForSky } from "./clouds-signals";
 import {
   SKY_PRESETS,
@@ -472,14 +473,25 @@ export default function CloudsScene() {
   const [history, setHistory] = useState<HistoryItem[]>(() => loadHistory());
   const skyRef = useRef(values.sky);
   skyRef.current = values.sky;
+  // True while a sky change was made BY a read: the sky effect below must
+  // not treat it as the user turning the dial (which would wipe the
+  // session heading and re-derive the mood the read just set).
+  const skyFromReadRef = useRef(false);
   const onSession = (read: SessionRead | null) => {
     setSession(read);
     if (!read) return;
     setValue("mood", read.mood);
+    // The read built its picture: its theme lands on the sky dial too —
+    // the one move for typed sessions, a final settle for spoken ones.
+    const readSky = read.theme ? THEME_SKY[read.theme] : null;
+    if (readSky && readSky !== skyRef.current) {
+      skyFromReadRef.current = true;
+      setValue("sky", readSky);
+    }
     setHistory((prev) => {
-      // skyRef, not values.sky: the sky the session ENDED on, after any
-      // spoken theme moved it, not the one this handler was created under.
-      const next = [...prev, { ...read, at: new Date().toISOString(), sky: skyRef.current }];
+      // The sky the session lands on: the read's own theme if it moved it,
+      // else wherever any spoken theme had already taken the dial.
+      const next = [...prev, { ...read, at: new Date().toISOString(), sky: readSky ?? skyRef.current }];
       saveHistory(next);
       return next;
     });
@@ -510,6 +522,12 @@ export default function CloudsScene() {
     const heading =
       values.sky === "Live" ? liveSky().heading : SKY_PRESETS[values.sky].heading;
     setValue("view.heading", heading);
+    // A sky the READ chose keeps the read's mood and heading; only a hand
+    // on the dial re-derives the mood and retires the session.
+    if (skyFromReadRef.current) {
+      skyFromReadRef.current = false;
+      return;
+    }
     setValue("mood", moodForSky(values.sky));
     // A new sky is a new read: the last session's heading steps aside.
     setSession(null);

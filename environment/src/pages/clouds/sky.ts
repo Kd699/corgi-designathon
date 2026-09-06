@@ -176,8 +176,10 @@ export interface CloudDials {
   invert: boolean;
   /** The mouth is parked for now — this brings the smile back. */
   smile: boolean;
-  /** Experimental toggles, collapsed in the panel (clouds-motif.tsx). */
-  experimental: {
+  /** Experimental toggles, collapsed in the panel (clouds-motif.tsx).
+   *  Optional: only the /clouds panel carries them — other dial builders
+   *  (week-sky-canvas.tsx) don't. */
+  experimental?: {
     /** Invert ↔ sky as a circle growing from the motif, not a crossfade. */
     circleReveal: boolean;
   };

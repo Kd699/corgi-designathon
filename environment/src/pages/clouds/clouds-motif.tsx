@@ -289,7 +289,11 @@ export default function CloudsMotif({
         .finally(() => setThinking(false));
     },
   });
-  const live = voice.listening || thinking;
+  // A line typed outside a voice session thinks IN PLACE: the sky page
+  // stays, the face stays, only the label says Thinking — no white page,
+  // no tracker. Voice keeps the full inverted treatment.
+  const [typedOnly, setTypedOnly] = useState(false);
+  const live = voice.listening || (thinking && !typedOnly);
   useEffect(() => {
     onLive?.(live);
   }, [live, onLive]);
@@ -425,6 +429,7 @@ export default function CloudsMotif({
 
   const send = () => {
     if (thinking) return;
+    if (!voice.listening) setTypedOnly(true);
     voice.typed(draft);
     setDraft("");
   };
@@ -449,7 +454,10 @@ export default function CloudsMotif({
         // release, buying the speech service its connection time while
         // the finger is still coming up.
         onPointerDown={(e) => {
-          if (e.button === 0 && !thinking) voice.toggle();
+          if (e.button === 0 && !thinking) {
+            if (!voice.listening) setTypedOnly(false);
+            voice.toggle();
+          }
         }}
         role="button"
         aria-label={voice.listening ? "Stop listening" : thinking ? "Thinking" : "Start voice"}

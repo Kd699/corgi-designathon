@@ -28,6 +28,12 @@ const THEME_SKIES: { theme: VoiceTheme; sky: SkyPresetName; rx: RegExp }[] = [
   { theme: "calm", sky: "Sunset", rx: /\b(calm|calmer|relaxed|relaxing|peaceful|serene|settled|chill|chilled)\b/gi },
 ];
 
+/** The same theme → sky pairing as a lookup, for callers that get a theme
+ *  from elsewhere (the session read applies its theme to the sky dial). */
+export const THEME_SKY: Record<VoiceTheme, SkyPresetName> = Object.fromEntries(
+  THEME_SKIES.map((t) => [t.theme, t.sky])
+) as Record<VoiceTheme, SkyPresetName>;
+
 // Five bands across the speech range, in Hz. Bar order on the face is
 // [b3, b1, b0, b2, b4] — fundamentals in the middle, air at the edges —
 // so the pattern moves like a voice, not like one level copied five times.
@@ -126,8 +132,10 @@ export function useVoice({ onTheme, onEnd, onStart }: VoiceOptions = {}) {
   }, []);
 
   /** One matcher for speech and typing: widgets land on first mention,
-   *  the latest emotion word sets the sky. */
-  const ingest = useCallback((all: string) => {
+   *  the latest emotion word sets the sky. themes:false keeps the widget
+   *  matching but leaves the sky alone — typed-only sessions wait for the
+   *  read to build the picture before anything moves. */
+  const ingest = useCallback((all: string, { themes = true } = {}) => {
     for (const kind of Object.keys(WIDGET_TRIGGERS) as WidgetKind[]) {
       if (!matchedRef.current.has(kind) && WIDGET_TRIGGERS[kind].test(all)) {
         matchedRef.current.add(kind);
@@ -136,6 +144,7 @@ export function useVoice({ onTheme, onEnd, onStart }: VoiceOptions = {}) {
         playWidgetAppear();
       }
     }
+    if (!themes) return;
     let best: { theme: VoiceTheme; sky: SkyPresetName; at: number } | null = null;
     for (const t of THEME_SKIES) {
       t.rx.lastIndex = 0;
@@ -340,7 +349,9 @@ export function useVoice({ onTheme, onEnd, onStart }: VoiceOptions = {}) {
       callbacks.current.onStart?.();
       typedRef.current = [line];
       publish();
-      ingest(line);
+      // Widgets still answer the line, but the sky holds: the read that
+      // comes back decides where the feeling and the sky land.
+      ingest(line, { themes: false });
       callbacks.current.onEnd?.(line, widgetsRef.current);
     },
     [ingest]
