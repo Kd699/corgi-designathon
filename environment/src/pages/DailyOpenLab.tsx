@@ -22,6 +22,7 @@ import { SCENARIOS } from './daily-open/scenarios'
 import { WEEK_MODES, WEEK_CONCEPTS, WEEK_CONCEPT_CONFIG } from './daily-open/week-in-review'
 import { WEEK_VIEWS } from './daily-open/week'
 import { WEEK_SKY_MODE, WEEK_SKY_ID, WEEK_SKY_CONFIG } from './daily-open/week-stage-sky'
+import { DAYBOARD_MODE, DAYBOARD_ID, DAYBOARD_CONFIG, DAYBOARD_STATES } from './daily-open/dayboard-mode'
 import { STANDARD_WELCOME_HELP } from './_shared/v3artboard-welcome-help'
 
 const mobile = 'mobile' as const
@@ -40,7 +41,7 @@ const SPEC = defineV3ArtboardSpec({
       { kbd: 'Components', text: 'The third tab renders each real component on its own, against every scenario palette.' },
     ],
   },
-  modes: [...DAILY_OPEN_MODES, ...WEEK_MODES, WEEK_SKY_MODE],
+  modes: [...DAILY_OPEN_MODES, ...WEEK_MODES, WEEK_SKY_MODE, DAYBOARD_MODE],
   componentFocus: DAILY_OPEN_COMPONENTS,
   componentFocusLayout: 'detail',
   defaults: { viewMode: 'artboard', platform: mobile, zoom: 0.5, frameHeight: 'auto' },
@@ -124,9 +125,48 @@ const SPEC = defineV3ArtboardSpec({
         },
       }],
     },
+    // The dayboard: the other paradigm. Where the week screens REPORT a week back to you,
+    // this one is populated by you talking — so it sits in its own section rather than
+    // pretending to be a fourth week concept.
+    {
+      sectionLabel: 'Dayboard (desktop)',
+      items: [{
+        id: `sb-${DAYBOARD_ID}`,
+        label: DAYBOARD_CONFIG.label,
+        description: DAYBOARD_CONFIG.thesis,
+        options: [{ modeId: DAYBOARD_ID, stateId: DAYBOARD_STATES[0].id, platform: web, platformLabel: 'D' }],
+        subgroup: {
+          label: 'Accounts of a day',
+          items: DAYBOARD_STATES.map((st) => ({
+            id: `sb-${DAYBOARD_ID}-${st.id}`,
+            label: st.label,
+            description: st.description,
+            options: [{ modeId: DAYBOARD_ID, stateId: st.id, platform: web, platformLabel: 'D' }],
+          })),
+        },
+      }],
+    },
   ],
 
   artboard: [
+    // Four accounts of a day, side by side. The point of the row is the DIFFERENCE between
+    // the compositions — same ten widgets available, four different boards.
+    {
+      id: `board-${DAYBOARD_ID}`,
+      divider: 'thick' as const,
+      flowBadge: { label: 'Dayboard' },
+      title: DAYBOARD_CONFIG.label,
+      description: `${DAYBOARD_CONFIG.thesis} ${DAYBOARD_CONFIG.risk}`,
+      steps: DAYBOARD_STATES.map((st, i) => ({
+        badge: i + 1,
+        title: st.label,
+        description: st.description,
+        maxWidth: 420,
+        // Alternatives, not a sequence — these are four different days, not four steps.
+        arrowAfter: false as const,
+        frames: [{ modeId: DAYBOARD_ID, stateId: st.id, platform: web, rawFrame: true, fitHeight: true }],
+      })),
+    },
     // The week screen, three concepts deep. One row per concept so a direction reads as a
     // sequence of cards — which is how it is actually used — rather than a grid to scan.
     ...WEEK_CONCEPTS.map((id, ci) => ({
@@ -217,6 +257,10 @@ const SPEC = defineV3ArtboardSpec({
       'Signals go through the real derive(); the real components render the result.',
       'A frame cannot claim behaviour the product does not have.',
       'Artboard frames are pointer-events-none, so a grid frame stays pinned to the scenario it is labelled with.',
+    ] },
+    { tone: 'warn', title: 'Dayboard — open', items: [
+      'Does the composition actually change enough between a quiet day and a wrecked one, or is it ten widgets in a fixed order wearing a different hat?',
+      'Everything on the board is the local regex read. Grok only runs with XAI_API_KEY set (see .env.example) — the status line under the composer always says which you are looking at.',
     ] },
     { tone: 'warn', title: 'Week in review — open', items: [
       'Placement is the question: does the weather own the screen (W1), sit in a frame (W2), or split into seven day-tiles (W3)?',

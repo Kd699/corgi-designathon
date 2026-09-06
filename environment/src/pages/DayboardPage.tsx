@@ -15,14 +15,23 @@ import { EMPTY_DAY, type AgentReply, type DayState } from './dayboard/types';
 import { WIDGETS } from './dayboard/widgets';
 import './dayboard/dayboard.css';
 
-const PROMPTS = [
+/* The three seeds. Exported because the artboard frames are these same accounts run through
+ * the same parser — a board frame must never be a drawing of the page, it must BE the page
+ * with a known input. */
+export const PROMPTS = [
   'Up at six, ran 20 minutes before anything else. Standup at 9:30 dragged. Two hours on the pricing deck, finally shipped it. Lunch with Sam, good one. Stuck on the API thing all afternoon, stressed by four. Slept 6 hours.',
   'Quiet one. Three hours of writing this morning, felt calm. Coffee with Priya at 11. Nothing else really.',
   'Rough. Woke at 5 and could not get back down. Back-to-back calls until two, missed lunch. Wound up by the evening.',
 ];
 
-export default function DayboardPage() {
-  const [text, setText] = useState('');
+/**
+ * `seed` pre-fills the composer and runs the local read once, so a frame can show a real
+ * populated board without anyone typing. `frozen` drops the composer entirely — the artboard
+ * shows the result, not the machinery, and can never drift off the account it is labelled
+ * with.
+ */
+export default function DayboardPage({ seed, frozen }: { seed?: string; frozen?: boolean } = {}) {
+  const [text, setText] = useState(seed ?? '');
   const [day, setDay] = useState<DayState>(EMPTY_DAY);
   const [surface, setSurface] = useState<AgentReply['surface']>([]);
   const [say, setSay] = useState('');
@@ -75,7 +84,7 @@ export default function DayboardPage() {
     : 'Nothing yet';
 
   return (
-    <div className="dayboard min-h-screen">
+    <div className={`dayboard ${frozen ? 'h-full overflow-y-auto' : 'min-h-screen'}`}>
       <div className="mx-auto flex max-w-[1180px] flex-col gap-7 px-8 py-10">
         <header className="flex flex-col gap-1">
           <p className="text-[11px] uppercase tracking-[0.18em] db-muted">Spacetime · dayboard</p>
@@ -86,7 +95,7 @@ export default function DayboardPage() {
           </p>
         </header>
 
-        <div className="flex flex-col gap-3">
+        {!frozen && <div className="flex flex-col gap-3">
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -123,7 +132,7 @@ export default function DayboardPage() {
               Model call failed, showing the local read — {error}
             </p>
           )}
-        </div>
+        </div>}
 
         {panels.length === 0 ? (
           <p className="py-16 text-center text-[15px] db-muted">

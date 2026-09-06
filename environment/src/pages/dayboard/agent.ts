@@ -97,8 +97,13 @@ function kindOf(text: string): TimelineEvent['kind'] {
 /** Sentence-level parse. Each sentence can contribute a mood point, an event, a win, a drag. */
 export function read(text: string, base: DayState = EMPTY_DAY): AgentReply {
   const sentences = text.split(/[.;\n]+/).map((s) => s.trim()).filter(Boolean);
+  // Fresh arrays, not EMPTY_DAY's. Spreading EMPTY_DAY copies its array references, so every
+  // push landed in the module-level constant and the next read started with the last one's
+  // events — four artboard frames showed each other's days, and the live page accumulated
+  // across sends. Caught by looking at the board, not by a test.
   const day: DayState = {
     ...EMPTY_DAY,
+    mood: [], timeline: [], people: [], focus: [], wins: [], frictions: [],
     body: { ...base.body },
   };
   let clock = 8;
