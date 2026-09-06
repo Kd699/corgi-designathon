@@ -72,7 +72,7 @@ function blobPath(pleasant: number, energy: number): string {
 }
 
 const CSS = /* css */ `
-.cm-motif { width: min(30vmin, 240px); height: min(30vmin, 240px); overflow: visible; pointer-events: none; filter: drop-shadow(0 2px 14px rgba(0,0,0,0.18)); }
+.cm-motif { width: min(30vmin, 240px); height: min(30vmin, 240px); overflow: visible; pointer-events: none; }
 .cm-motif .cm-shape { fill: #fff; transition: d 700ms ease; }
 .cm-motif .cm-cutout { color: #000; }
 .cm-motif .cm-eye { fill: currentColor; transition: height 700ms ease, y 700ms ease; transform-box: fill-box; transform-origin: center; }
@@ -88,7 +88,7 @@ const CSS = /* css */ `
   .cm-motif .cm-blink, .cm-motif .cm-gaze { animation: none; }
   .cm-motif .cm-shape, .cm-motif .cm-eye, .cm-motif .cm-mouth, .cm-motif .cm-brows, .cm-motif .cm-brows path, .cm-motif .cm-eye-tilt { transition: none; }
 }
-.cm-mood-label { margin-top: 0.4em; font-family: 'PP Editorial Old', ui-serif, Georgia, serif; font-weight: 400; font-size: min(5vmin, 34px); line-height: 1; color: #fff; text-shadow: 0 2px 14px rgba(0,0,0,0.18); }
+.cm-mood-label { margin-top: 0.4em; font-family: 'PP Editorial Old', ui-serif, Georgia, serif; font-weight: 400; font-size: min(5vmin, 34px); line-height: 1; color: #fff; }
 .cm-read { margin-top: 0.9em; max-width: min(78vmin, 480px); padding: 0 16px; text-align: center; font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; font-weight: 400; font-size: 14px; line-height: 2; color: rgba(255,255,255,0.92); text-shadow: 0 1px 10px rgba(0,0,0,0.22); }
 .cm-pill { display: inline-block; padding: 0.05em 0.65em; margin: 0 0.1em; border-radius: 999px; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35); backdrop-filter: blur(6px); font-variant-numeric: tabular-nums; font-size: 0.86em; line-height: 1.6; white-space: nowrap; vertical-align: 0.05em; }
 `;
