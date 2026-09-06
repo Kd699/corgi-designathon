@@ -70,7 +70,8 @@ function Bars({ values, max }: { values: number[]; max: number }) {
             width={w}
             height={bh}
             rx={2.5}
-            fill={last ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.38)"}
+            fill="currentColor"
+            fillOpacity={last ? 0.95 : 0.38}
           />
         );
       })}
@@ -86,8 +87,8 @@ function Line({ values, max }: { values: number[]; max: number }) {
   const [lx, ly] = pts.split(" ").pop()!.split(",").map(Number);
   return (
     <svg width={w} height={h} aria-hidden="true">
-      <polyline points={pts} fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={lx} cy={ly} r="3" fill="#fff" />
+      <polyline points={pts} fill="none" stroke="currentColor" strokeOpacity="0.7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lx} cy={ly} r="3" fill="currentColor" />
     </svg>
   );
 }
@@ -124,6 +125,8 @@ const CSS = /* css */ `
 .cw-sub { font-size: 11px; opacity: 0.82; white-space: nowrap; }
 @keyframes cw-pop { from { opacity: 0; transform: translateY(14px) scale(0.85); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .cw-card { animation: none; } }
+/* On the inverted (white) page the glass goes dark-on-light. */
+[data-invert="true"] .cw-card { background: rgba(24,36,54,0.05); border-color: rgba(24,36,54,0.22); color: #1e2a3a; }
 `;
 
 export function WidgetRow({ kinds }: { kinds: WidgetKind[] }) {

@@ -84,19 +84,14 @@ function circlePath(): string {
   return `M ${points[0]} L ${points.slice(1).join(" L ")} Z`;
 }
 
-/** A path rescaled to objectBoundingBox units (0..1) — the clipPath that
- *  cuts the inverted-sky div to the character's silhouette. */
-function to01(path: string): string {
-  return path.replace(/(\d+\.?\d*)/g, (n) => (Number(n) / 100).toFixed(4));
-}
 
 const CSS = /* css */ `
 .cm-wrap { position: relative; width: min(30vmin, 240px); height: min(30vmin, 240px); pointer-events: auto; cursor: pointer; }
 .cm-motif { position: relative; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .cm-motif .cm-shape { fill: #fff; transition: d 700ms ease; }
+.cm-motif .cm-hole { fill: #000; transition: d 700ms ease; }
 .cm-motif .cm-cutout { color: #000; }
 .cm-motif .cm-ink { color: #fff; }
-.cm-invert { position: absolute; inset: 0; pointer-events: none; backdrop-filter: invert(1); -webkit-backdrop-filter: invert(1); clip-path: url(#cm-blob-clip); }
 .cm-motif .cm-eye { fill: currentColor; transition: height 700ms ease, y 700ms ease; transform-box: fill-box; transform-origin: center; }
 .cm-motif .cm-mouth, .cm-motif .cm-brows path { fill: none; stroke: currentColor; stroke-width: 4.5; stroke-linecap: round; }
 .cm-motif .cm-mouth { transition: d 700ms ease; }
@@ -120,6 +115,10 @@ const CSS = /* css */ `
 .cm-mood-label { margin-top: 0.4em; font-family: 'PP Editorial Old', ui-serif, Georgia, serif; font-weight: 400; font-size: min(5vmin, 34px); line-height: 1; color: #fff; }
 .cm-read { margin-top: 0.9em; max-width: min(78vmin, 480px); padding: 0 16px; text-align: center; font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; font-weight: 400; font-size: 14px; line-height: 2; color: rgba(255,255,255,0.92); text-shadow: 0 1px 10px rgba(0,0,0,0.22); }
 .cm-pill { display: inline-block; padding: 0.05em 0.65em; margin: 0 0.1em; border-radius: 999px; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35); backdrop-filter: blur(6px); font-variant-numeric: tabular-nums; font-size: 0.86em; line-height: 1.6; white-space: nowrap; vertical-align: 0.05em; }
+/* Inverted page: the sheet is white, so the type goes dark. */
+[data-invert="true"] .cm-mood-label { color: #1e2a3a; }
+[data-invert="true"] .cm-read { color: rgba(24,36,54,0.88); text-shadow: none; }
+[data-invert="true"] .cm-pill { background: rgba(24,36,54,0.06); border-color: rgba(24,36,54,0.28); }
 `;
 
 export default function CloudsMotif({
@@ -234,7 +233,7 @@ export default function CloudsMotif({
   );
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
+    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center" data-invert={invert}>
       <style>{CSS}</style>
       <div
         ref={voice.levelHostRef}
@@ -243,10 +242,6 @@ export default function CloudsMotif({
         role="button"
         aria-label={voice.listening ? "Stop listening" : "Start voice"}
       >
-        {/* Inverted mode's body: the sky behind, colour-negated, clipped to
-            the blob silhouette. Sits under the svg so the white face reads
-            on top of it. */}
-        {invert && <div className="cm-invert" />}
         <svg
           ref={svgRef}
           className={`cm-motif${face.asleep ? " cm-asleep" : ""}`}
@@ -257,14 +252,24 @@ export default function CloudsMotif({
           style={style}
         >
           <defs>
-            <clipPath id="cm-blob-clip" clipPathUnits="objectBoundingBox">
-              <path d={to01(blob)} />
-            </clipPath>
-            {/* White keeps, black cuts: the rect keeps the whole blob and
-                the face group (drawn black, at the study's 72%
-                face-to-body scale) punches the features through to the
-                sky. */}
-            {!invert && (
+            {/* White keeps, black cuts. Normal: the rect keeps the whole
+                blob and the face (black, at the study's 72% face-to-body
+                scale) punches the features through to the sky. Inverted:
+                the sheet mask keeps a huge white page, the blob cuts the
+                one window onto the sky, and the face (white) is restored
+                inside the window — the exact negative of normal. */}
+            {invert ? (
+              <mask id="cm-motif-mask" maskUnits="userSpaceOnUse" x="-4000" y="-4000" width="8000" height="8000">
+                <rect x="-4000" y="-4000" width="8000" height="8000" fill="#fff" />
+                <path
+                  className="cm-hole"
+                  style={{ d: `path('${blob}')` } as CSSProperties}
+                  d={blob}
+                />
+                {faceGroup("cm-ink")}
+                {barsGroup("cm-ink")}
+              </mask>
+            ) : (
               <mask id="cm-motif-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
                 <rect width="100" height="100" fill="#fff" />
                 {faceGroup("cm-cutout")}
@@ -272,7 +277,12 @@ export default function CloudsMotif({
               </mask>
             )}
           </defs>
-          {!invert && (
+          {invert ? (
+            // The white sheet: far larger than any viewport (the svg
+            // overflows visibly), holed by the mask so the sky only shows
+            // through the character.
+            <rect x="-4000" y="-4000" width="8000" height="8000" fill="#fff" mask="url(#cm-motif-mask)" />
+          ) : (
             <path
               className="cm-shape"
               mask="url(#cm-motif-mask)"
@@ -280,8 +290,6 @@ export default function CloudsMotif({
               d={blob}
             />
           )}
-          {invert && faceGroup("cm-ink")}
-          {invert && barsGroup("cm-ink")}
         </svg>
       </div>
       <span className="cm-mood-label">{voice.listening ? "Listening" : mood}</span>
