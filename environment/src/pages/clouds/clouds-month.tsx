@@ -7,7 +7,7 @@
 // never reshuffles. Tapping a day masks OUT toward that cell (the zoom
 // runs to where your finger is) and lands on that day's sessions view.
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { SPECS, blobPath, type MotifMood } from "./clouds-motif";
 import { SKY_PRESETS, cssPaletteFor, type SkyPresetName } from "./sky";
 import type { HistoryItem } from "./clouds-history";
@@ -43,16 +43,17 @@ function mockMood(year: number, month: number, day: number): MotifMood {
 }
 
 const CSS = /* css */ `
-/* The sheet: fixed, white, scrollable, and it ARRIVES as a mask — a circle
-   growing out of the day pill until it owns the frame, the content easing
-   down from a slight overscale so the whole page reads as one zoom. */
+/* The sheet: fixed, white, scrollable. It arrives as a quiet fade under
+   the real transition — the mascot's own shape flying from the stage into
+   today's cell (the traveler, built in the effect below), morphing into
+   that day's blob and taking on its sky as it lands. */
 .mv { position: fixed; inset: 0; z-index: 25; background: #fff; overflow-y: auto; pointer-events: auto;
   font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; color: #111;
-  animation: mv-in 720ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-@keyframes mv-in { from { clip-path: circle(0% at 50% 28px); } to { clip-path: circle(142% at 50% 28px); } }
+  animation: mv-in 460ms ease both; }
+@keyframes mv-in { from { opacity: 0; } to { opacity: 1; } }
 .mv-inner { width: min(92%, 560px); margin: 0 auto; padding: 84px 0 48px;
   animation: mv-settle 720ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-@keyframes mv-settle { from { transform: scale(1.06); } to { transform: none; } }
+@keyframes mv-settle { from { transform: scale(1.045); } to { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .mv, .mv-inner { animation: none; } }
 .mv-name { margin: 0 0 6px; font-family: 'PP Editorial Old', ui-serif, Georgia, serif; font-weight: 400; font-size: 40px; line-height: 1; }
 /* The overall feeling: the month's winning mood, worn as a small shape. */
@@ -70,8 +71,8 @@ const CSS = /* css */ `
 .mv-day[data-today="true"] { box-shadow: inset 0 0 0 1.5px rgba(0,0,0,0.28); }
 .mv-num { position: absolute; top: 5px; left: 8px; font-size: 9.5px; font-variant-numeric: tabular-nums; color: rgba(0,0,0,0.45); }
 .mv-shape { width: 100%; height: 100%; display: block; }
-/* Days still to come: the outline only, waiting. */
-.mv-ghost { fill: none; stroke: rgba(0,0,0,0.14); stroke-width: 2.5; stroke-dasharray: 4 5; }
+/* Days still to come show their sample emotion too, just quieter. */
+.mv-day:disabled .mv-shape { opacity: 0.38; }
 .mv-hint { margin: 18px 2px 26px; font-size: 12px; color: rgba(0,0,0,0.4); }
 `;
 
@@ -95,9 +96,12 @@ function DayShape({ mood, sky, id }: { mood: MotifMood; sky: SkyPresetName | "Li
 
 export default function MonthCalendar({
   history,
+  mood,
   onDay,
 }: {
   history: HistoryItem[];
+  /** The mascot's current mood — the shape the traveler departs as. */
+  mood: MotifMood;
   /** A tapped day, as days back from today — fired AFTER the mask-out. */
   onDay: (offset: number) => void;
 }) {
@@ -130,10 +134,11 @@ export default function MonthCalendar({
     return { mood, sky: MOOD_SKY[mood] as SkyPresetName | "Live" };
   };
 
-  // The month's overall feeling: the mood that won the most elapsed days.
+  // The month's overall feeling: the mood that won the most days — the
+  // whole month counts, since every day carries a sample emotion.
   const overall = useMemo(() => {
     const counts = new Map<MotifMood, number>();
-    for (let d = 1; d <= today; d++) {
+    for (let d = 1; d <= daysInMonth; d++) {
       const { mood } = dayFor(d);
       counts.set(mood, (counts.get(mood) ?? 0) + 1);
     }
@@ -141,7 +146,78 @@ export default function MonthCalendar({
     for (const [mood, n] of counts) if (n > (counts.get(top) ?? 0)) top = mood;
     return top;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logged, today]);
+  }, [logged, daysInMonth]);
+
+  // THE TRAVELER. On open, the mascot's shape LEAVES the stage: a clone
+  // departs from the motif's rect and flies into today's cell, its outline
+  // morphing (same 64 points, so d interpolates) from the current mood's
+  // blob into today's day-shape while the white fill dissolves into that
+  // day's sky gradient. The sheet just fades beneath it.
+  useEffect(() => {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const wrapEl = document.querySelector(".cm-wrap");
+    const sheet = sheetRef.current;
+    if (!wrapEl || !sheet) return;
+    const from = wrapEl.getBoundingClientRect();
+    let svg: SVGSVGElement | null = null;
+    const raf = requestAnimationFrame(() => {
+      const cellEl = sheet.querySelector('[data-today="true"] .mv-shape');
+      if (!cellEl) return;
+      const to = cellEl.getBoundingClientRect();
+      const startSpec = SPECS[mood];
+      const landing = dayFor(today);
+      const endSpec = SPECS[landing.mood];
+      const startD = blobPath(startSpec.pleasant, startSpec.energy, 46);
+      const endD = blobPath(endSpec.pleasant, endSpec.energy, 44);
+      const palette = cssPaletteFor(landing.sky);
+      const NS = "http://www.w3.org/2000/svg";
+      svg = document.createElementNS(NS, "svg");
+      svg.setAttribute("viewBox", "0 0 100 100");
+      svg.setAttribute("aria-hidden", "true");
+      Object.assign(svg.style, {
+        position: "fixed", left: "0", top: "0",
+        width: `${from.width}px`, height: `${from.height}px`,
+        zIndex: "40", pointerEvents: "none", transformOrigin: "0 0",
+        transform: `translate(${from.left}px, ${from.top}px)`,
+      } as Partial<CSSStyleDeclaration>);
+      const defs = document.createElementNS(NS, "defs");
+      defs.innerHTML = `<linearGradient id="mv-tr-g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${palette.top}"/><stop offset="55%" stop-color="${palette.mid}"/><stop offset="100%" stop-color="${palette.bot}"/>
+      </linearGradient>`;
+      const white = document.createElementNS(NS, "path");
+      white.setAttribute("d", startD);
+      white.setAttribute("fill", "#fff");
+      const tinted = document.createElementNS(NS, "path");
+      tinted.setAttribute("d", startD);
+      tinted.setAttribute("fill", "url(#mv-tr-g)");
+      tinted.setAttribute("opacity", "0");
+      svg.append(defs, white, tinted);
+      document.body.appendChild(svg);
+      const duration = 950;
+      const easing = "cubic-bezier(0.22, 1, 0.36, 1)";
+      svg.animate(
+        [
+          { transform: `translate(${from.left}px, ${from.top}px) scale(1)` },
+          { transform: `translate(${to.left}px, ${to.top}px) scale(${to.width / from.width}, ${to.height / from.height})` },
+        ],
+        { duration, easing, fill: "forwards" }
+      );
+      const morph = { duration, easing, fill: "forwards" as const };
+      white.animate([{ d: `path('${startD}')` }, { d: `path('${endD}')` }], morph);
+      tinted.animate([{ d: `path('${startD}')` }, { d: `path('${endD}')` }], morph);
+      // The sky pours in on the way down...
+      white.animate([{ opacity: 1 }, { opacity: 0 }], { duration: duration * 0.55, delay: duration * 0.35, easing: "ease", fill: "forwards" });
+      tinted.animate([{ opacity: 0 }, { opacity: 1 }], { duration: duration * 0.55, delay: duration * 0.35, easing: "ease", fill: "forwards" });
+      // ...and the clone hands over to the real cell underneath.
+      const done = svg.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 190, delay: duration, easing: "ease", fill: "forwards" });
+      done.onfinish = () => { svg?.remove(); svg = null; };
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      svg?.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The mask-out: the sheet collapses toward the tapped cell — the same
   // circle that revealed the month, run backwards to where the finger is —
@@ -202,7 +278,10 @@ export default function MonthCalendar({
         <div className="mv-grid">
           {cells.map((day, i) => {
             if (day === null) return <span key={`pad-${i}`} />;
+            // Every day wears a sample emotion — the full month reads at a
+            // glance. Days still to come just aren't openable yet.
             const future = day > today;
+            const { mood: dayMood, sky } = dayFor(day);
             return (
               <button
                 key={day}
@@ -214,16 +293,7 @@ export default function MonthCalendar({
                 onClick={(e) => leave(day, e.currentTarget)}
               >
                 <span className="mv-num">{day}</span>
-                {future ? (
-                  <svg className="mv-shape" viewBox="0 0 100 100" aria-hidden="true">
-                    <path className="mv-ghost" d={blobPath(0.7, 0.2, 38)} />
-                  </svg>
-                ) : (
-                  (() => {
-                    const { mood, sky } = dayFor(day);
-                    return <DayShape mood={mood} sky={sky} id={`mv-g-${day}`} />;
-                  })()
-                )}
+                <DayShape mood={dayMood} sky={sky} id={`mv-g-${day}`} />
               </button>
             );
           })}

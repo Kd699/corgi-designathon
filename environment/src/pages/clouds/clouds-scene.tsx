@@ -935,6 +935,7 @@ export default function CloudsScene() {
       {!voiceLive && scope === "month" && (
         <MonthCalendar
           history={history}
+          mood={values.mood}
           onDay={(offset) => {
             setScope("day");
             setDayOffset(offset);
