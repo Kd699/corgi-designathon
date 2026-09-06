@@ -645,7 +645,19 @@ export default function CloudsScene() {
       />
       {/* The history steps aside while a voice session is live — the
           white page belongs to the tracker and its stream. */}
-      {!voiceLive && <SessionHistory items={history} inverted={values.invert} />}
+      {!voiceLive && (
+        <SessionHistory
+          items={history}
+          inverted={values.invert}
+          onDelete={(at) =>
+            setHistory((prev) => {
+              const next = prev.filter((item) => item.at !== at);
+              saveHistory(next);
+              return next;
+            })
+          }
+        />
+      )}
       <div style={{ display: dialsVisible ? undefined : "none" }}>
         <DialRoot position="top-right" theme="dark" productionEnabled />
       </div>
