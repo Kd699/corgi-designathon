@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import DailyOpenLab from './pages/DailyOpenLab';
+import DayboardPage from './pages/DayboardPage';
 import CloudsPage from './pages/clouds/page';
 import { AgentationSidePanelBridge } from './dev/agentation-side-panel-bridge';
 import './index.css';
@@ -12,7 +13,8 @@ import './index.css';
  * hash itself (#m=…&s=…&p=…&v=… selects a mode/state/platform/view), so a link someone
  * pastes into Slack opens on the exact frame they meant. `#/app` is the escape hatch to
  * the bare environment — the same components, no board around them. `/clouds` (and
- * `#/clouds`) is the sky brought over from next-personal. */
+ * `#/clouds`) is the sky brought over from next-personal, and `#/day` is the dayboard —
+ * talk about your day, Grok composes the widgets. */
 function isClouds(path: string, hash: string) {
   return path === '/clouds' || path.startsWith('/clouds/') || hash.startsWith('#/clouds');
 }
@@ -29,6 +31,7 @@ function Root() {
     };
   }, []);
   if (isClouds(loc.path, loc.hash)) return <CloudsPage />;
+  if (loc.hash.startsWith('#/day')) return <DayboardPage />;
   return loc.hash.startsWith('#/app') ? <App /> : <DailyOpenLab />;
 }
 

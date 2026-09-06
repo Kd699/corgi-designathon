@@ -1,0 +1,42 @@
+/* Dayboard tokens. Scoped to .dayboard so nothing here can reach the concept board.
+ * A warm off-white ground with a single ink accent — the widgets carry the colour, the
+ * shell stays out of the way. */
+.dayboard {
+  --db-bg: #f6f5f2;
+  --db-panel: #ffffff;
+  --db-ink: #17181c;
+  --db-muted: #6d6f78;
+  --db-line: #e4e2dd;
+  --db-accent: #3f4ae0;
+  --db-good: #1c8f6b;
+  --db-good-wash: #e8f5f0;
+  --db-warn: #c2542f;
+  --db-warn-wash: #fbeee8;
+  --db-soft: #a9a7a0;
+  background: var(--db-bg);
+  color: var(--db-ink);
+}
+@media (prefers-color-scheme: dark) {
+  .dayboard:not([data-db-theme="light"]) {
+    --db-bg: #14151a;
+    --db-panel: #1c1e25;
+    --db-ink: #f2f1ee;
+    --db-muted: #9a9ba4;
+    --db-line: #2c2f38;
+    --db-accent: #8b93ff;
+    --db-good: #4fc79b;
+    --db-good-wash: #17302a;
+    --db-warn: #e8886a;
+    --db-warn-wash: #33211c;
+    --db-soft: #5b5e69;
+  }
+}
+
+.db-panel { background: var(--db-panel); border: 1px solid var(--db-line); }
+.db-muted { color: var(--db-muted); }
+
+/* A widget the agent has just surfaced arrives rather than blinking into place. Entry only —
+ * it animates FROM a visible resting state, so a still frame is never mid-fade. */
+@keyframes db-arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.db-panel { animation: db-arrive 320ms cubic-bezier(.22,.8,.25,1) both; }
+@media (prefers-reduced-motion: reduce) { .db-panel { animation: none; } }
