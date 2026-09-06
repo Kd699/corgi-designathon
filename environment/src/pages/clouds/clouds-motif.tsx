@@ -583,14 +583,15 @@ export default function CloudsMotif({
       {!live && session && (
         <p className="cm-read" data-read-source={(picture ?? session).source} key={picture ? picture.text : session.heading}>
           {/* One check-in: its own read. More: the day grouped. */}
-          {picture ? picture.text : session.summary} <span className="cm-pill">{session.mood}</span>
+          {picture ? picture.text : session.summary} <span className="cm-pill">{(picture ?? session).mood}</span>
           {picture && <span className="cm-pill">{picture.count} check-ins</span>}
           {(picture ?? session).source === "local" && <span className="cm-pill">local read</span>}
         </p>
       )}
       {!live && !session && picture && (
         <p className="cm-read" data-read-source={picture.source} key={picture.text}>
-          {picture.text} <span className="cm-pill">{picture.count} check-ins</span>
+          {picture.text} <span className="cm-pill">{picture.mood}</span>{" "}
+          <span className="cm-pill">{picture.count} check-ins</span>
           {picture.source === "local" && <span className="cm-pill">local read</span>}
         </p>
       )}

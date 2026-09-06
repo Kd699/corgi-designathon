@@ -86,24 +86,50 @@ export type PictureItem = {
   at: string;
 };
 
-export type DayPicture = { text: string; count: number; source: "openai" | "local" };
+export type DayPicture = {
+  text: string;
+  count: number;
+  /** Where the day sits NOW: the shape the motif morphs into. */
+  mood: MotifMood;
+  /** The closest emotional family: sets the sky. Always determined. */
+  theme: Exclude<SessionTheme, null>;
+  source: "openai" | "local";
+};
+
+/** Every mood has a nearest emotional family, so the picture can always
+ *  name a sky even when no emotion word was ever said. */
+const MOOD_THEMES: Record<MotifMood, Exclude<SessionTheme, null>> = {
+  Excited: "happy",
+  Content: "calm",
+  Tense: "anxious",
+  Weary: "sad",
+  Asleep: "calm",
+};
 
 export async function summariseDay(items: PictureItem[]): Promise<DayPicture> {
   const take = items.slice(-6);
+  const count = items.length;
   try {
-    return { text: await pictureViaOpenAI(take), count: items.length, source: "openai" };
+    return { ...(await pictureViaOpenAI(take)), count, source: "openai" };
   } catch (e) {
     console.info("[clouds] day picture fell back to local:", e instanceof Error ? e.message : e);
-    return { text: localPicture(take), count: items.length, source: "local" };
+    return { ...localPicture(take), count, source: "local" };
   }
 }
 
 const PICTURE_SYSTEM = `You get the check-ins someone logged today, oldest first — each one already summarised. Hand back the general picture of their day so far.
 
 Return ONLY JSON, no prose around it:
-{ "text": string }  // 1-2 sentences, second person ("you"). The thread of the day: where it started, where it turned if it turned, where it sits now. Quote their own details sparingly. No advice, no moralising, no list.`;
+{
+  "text": string,   // 1-2 sentences, second person ("you"). The thread of the day: where it started, where it turned if it turned, where it sits now. Quote their own details sparingly. No advice, no moralising, no list.
+  "mood": "Content" | "Excited" | "Tense" | "Weary" | "Asleep",  // where the day sits NOW. Commit to one — never hedge.
+  "theme": "happy" | "anxious" | "sad" | "calm"  // the closest emotional family right now. Always pick one.
+}
 
-async function pictureViaOpenAI(items: PictureItem[]): Promise<string> {
+Mood rules: high energy + pleasant → Excited; high energy + unpleasant → Tense; low energy + pleasant → Content;
+low energy + unpleasant → Weary; exhausted / winding into sleep → Asleep.`;
+
+async function pictureViaOpenAI(items: PictureItem[]): Promise<Pick<DayPicture, "text" | "mood" | "theme">> {
   if (items.length === 0) throw new Error("nothing logged");
   const lines = items
     .map((it) => {
@@ -127,9 +153,16 @@ async function pictureViaOpenAI(items: PictureItem[]): Promise<string> {
   const json = await res.json();
   const content = json?.choices?.[0]?.message?.content;
   if (!content) throw new Error("openai returned no content");
-  const text = String((JSON.parse(content) as { text?: unknown }).text ?? "").trim();
+  const parsed = JSON.parse(content) as { text?: unknown; mood?: unknown; theme?: unknown };
+  const text = String(parsed.text ?? "").trim();
   if (!text) throw new Error("openai picture was empty");
-  return text;
+  // Never hedge: an off-list mood falls back to the latest check-in's, and
+  // the theme to that mood's family — a sky and a shape either way.
+  const mood = MOODS.includes(parsed.mood as MotifMood) ? (parsed.mood as MotifMood) : items[items.length - 1].mood;
+  const theme = (["happy", "anxious", "sad", "calm"] as const).includes(parsed.theme as never)
+    ? (parsed.theme as Exclude<SessionTheme, null>)
+    : MOOD_THEMES[mood];
+  return { text, mood, theme };
 }
 
 const THEME_WORDS: Record<Exclude<SessionTheme, null>, string> = {
@@ -140,18 +173,20 @@ const THEME_WORDS: Record<Exclude<SessionTheme, null>, string> = {
 };
 const COUNT_WORDS = ["", "one", "two", "three", "four", "five", "six"];
 
-export function localPicture(items: PictureItem[]): string {
+export function localPicture(items: PictureItem[]): Pick<DayPicture, "text" | "mood" | "theme"> {
   const n = items.length;
   const count = COUNT_WORDS[n] ?? String(n);
-  const first = items.find((it) => it.theme)?.theme ?? null;
-  const last = [...items].reverse().find((it) => it.theme)?.theme ?? null;
-  if (first && last && first !== last) {
-    return `Across ${count} check-ins today you've moved from ${THEME_WORDS[first]} to ${THEME_WORDS[last]}; most recently: ${items[items.length - 1].heading.toLowerCase()}.`;
-  }
-  if (last) {
-    return `Across ${count} check-ins today the thread has stayed ${THEME_WORDS[last]}; most recently: ${items[items.length - 1].heading.toLowerCase()}.`;
-  }
-  return `You've checked in ${count} times today; the tone has been hard to pin down from the words alone.`;
+  const latest = items[items.length - 1];
+  // Every check-in carries a mood, so the picture always lands somewhere:
+  // the theme is the latest spoken one, else the latest mood's family.
+  const mood = latest.mood;
+  const first = items.find((it) => it.theme)?.theme ?? MOOD_THEMES[items[0].mood];
+  const theme = [...items].reverse().find((it) => it.theme)?.theme ?? MOOD_THEMES[mood];
+  const text =
+    first !== theme
+      ? `Across ${count} check-ins today you've moved from ${THEME_WORDS[first]} to ${THEME_WORDS[theme]}; most recently: ${latest.heading.toLowerCase()}.`
+      : `Across ${count} check-ins today the thread has stayed ${THEME_WORDS[theme]}; most recently: ${latest.heading.toLowerCase()}.`;
+  return { text, mood, theme };
 }
 
 async function viaOpenAI(text: string, ctx: SessionContext): Promise<SessionRead> {
@@ -281,9 +316,17 @@ export function localRead(text: string, ctx: SessionContext): SessionRead {
 
   const words = text.split(/\s+/);
   const quote = words.length > 22 ? `${words.slice(0, 22).join(" ")}…` : text;
+  // No emotion word said: the mood still names a tone — never "hard to read".
+  const MOOD_FEELS: Record<MotifMood, string> = {
+    Excited: "it sounded lively",
+    Tense: "it sounded wound up",
+    Content: "it sounded settled",
+    Weary: "it sounded low",
+    Asleep: "it sounded quiet",
+  };
   const feel = theme
     ? { happy: "it sounded upbeat", anxious: "it sounded wound up", sad: "it sounded low", calm: "it sounded settled" }[theme]
-    : "hard to read the tone from the words alone";
+    : MOOD_FEELS[mood];
   const summary = `You said “${quote}” — ${feel}${topicLine ? `, mostly about ${topicLine}` : ""}.`;
 
   return { heading: heading.split(/\s+/).slice(0, 7).join(" "), summary, mood, theme, source: "local" };

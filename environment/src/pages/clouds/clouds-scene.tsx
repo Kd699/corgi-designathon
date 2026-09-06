@@ -464,6 +464,7 @@ export default function CloudsScene() {
     } as DialConfig
   );
   const values = dial.values as unknown as CloudDials;
+  const setValue = dial.setValue;
 
   // THE SESSION READ. When a voice (or typed) session ends, the motif hands
   // up what clouds-session.ts made of it; the scene owns it because the
@@ -513,12 +514,22 @@ export default function CloudsScene() {
     }
     let alive = true;
     summariseDay(today).then((p) => {
-      if (alive) setPicture(p);
+      if (!alive) return;
+      setPicture(p);
+      // Two messages in, the picture COMMITS: the face morphs to where the
+      // day sits and the sky moves to its theme — same guarded path as a
+      // session read, so the grouped text isn't retired by its own sky.
+      setValue("mood", p.mood);
+      const pictureSky = THEME_SKY[p.theme];
+      if (pictureSky !== skyRef.current) {
+        skyFromReadRef.current = true;
+        setValue("sky", pictureSky);
+      }
     });
     return () => {
       alive = false;
     };
-  }, [history]);
+  }, [history, setValue]);
 
   // Scrolling into the history fades the motif — shape, greeting, read —
   // while the sky (a fixed canvas) stays exactly where it is. One CSS var,
@@ -540,7 +551,6 @@ export default function CloudsScene() {
   // rules). setValue, not derived values, so both dials show where they
   // landed and stay adjustable from there — the frame loop then PANS to
   // the heading, and the face morphs to the mood.
-  const setValue = dial.setValue;
   useEffect(() => {
     const heading =
       values.sky === "Live" ? liveSky().heading : SKY_PRESETS[values.sky].heading;
