@@ -131,9 +131,9 @@ export default function CloudsMotif({
   /** The read behind the mood (clouds-signals.ts) — signal citations
    *  arrive as { pill } segments and render as chips in the line. */
   summary?: ReadSegment[];
-  /** Swap what's solid: normally the body is white and the face is sky;
-   *  inverted, the body is the sky in NEGATIVE (backdrop-filter clipped to
-   *  the blob) and the face is drawn in white on top. */
+  /** Invert the page: a white sheet covers the sky, which shows only
+   *  through the blob — with the face restored in white inside it. The
+   *  exact negative of the normal white-body / sky-face look. */
   invert?: boolean;
   /** The mouth is off the face for now — this dial brings it back. */
   smile?: boolean;

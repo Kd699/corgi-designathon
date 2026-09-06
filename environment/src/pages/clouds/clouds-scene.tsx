@@ -415,8 +415,8 @@ export default function CloudsScene() {
         options: [...MOTIF_MOODS],
         default: "Content",
       },
-      // Swap the motif's solids: white body / sky face, or negative-sky
-      // body / white face (clouds-motif.tsx).
+      // Invert the page: white sheet everywhere, the sky masked into the
+      // motif's shape (clouds-motif.tsx).
       invert: false,
       // The mouth is parked for now — flip this to bring the smile back.
       smile: false,
