@@ -125,8 +125,11 @@ const CSS = /* css */ `
   .cm-motif .cm-blink, .cm-motif .cm-gaze { animation: none; }
   .cm-motif .cm-shape, .cm-motif .cm-eye, .cm-motif .cm-mouth, .cm-motif .cm-brows, .cm-motif .cm-brows path, .cm-motif .cm-eye-tilt { transition: none; }
 }
-.cm-mood-label { margin-top: 0.4em; font-family: 'PP Editorial Old', ui-serif, Georgia, serif; font-weight: 400; font-size: min(5vmin, 34px); line-height: 1; color: #fff; }
-.cm-read { margin-top: 0.9em; max-width: min(78vmin, 480px); padding: 0 16px; text-align: center; font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; font-weight: 400; font-size: 14px; line-height: 2; color: rgba(255,255,255,0.92); text-shadow: 0 1px 10px rgba(0,0,0,0.22); }
+/* position: relative on the type, or the sheet eats it: cm-wrap is
+   positioned, so its viewport-sized white rect paints ABOVE later
+   non-positioned siblings — the label under the sheet, invisible. */
+.cm-mood-label { position: relative; margin-top: 0.4em; font-family: 'PP Editorial Old', ui-serif, Georgia, serif; font-weight: 400; font-size: min(5vmin, 34px); line-height: 1; color: #fff; }
+.cm-read { position: relative; margin-top: 0.9em; max-width: min(78vmin, 480px); padding: 0 16px; text-align: center; font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; font-weight: 400; font-size: 14px; line-height: 2; color: rgba(255,255,255,0.92); text-shadow: 0 1px 10px rgba(0,0,0,0.22); }
 .cm-pill { display: inline-block; padding: 0.05em 0.65em; margin: 0 0.1em; border-radius: 999px; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35); backdrop-filter: blur(6px); font-variant-numeric: tabular-nums; font-size: 0.86em; line-height: 1.6; white-space: nowrap; vertical-align: 0.05em; }
 /* Inverted page: the sheet is white, so the type goes black and grey. */
 [data-invert="true"] .cm-mood-label { color: #111; }
@@ -134,7 +137,7 @@ const CSS = /* css */ `
 [data-invert="true"] .cm-pill { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.24); color: rgba(0,0,0,0.72); }
 /* The voice stream: each settled utterance is a bubble cut in the sky's
    own palette; the last one rewrites itself live as you speak. */
-.cm-bubbles { display: flex; flex-direction: column; align-items: center; gap: 9px; margin-top: 1em; max-width: min(80vmin, 520px); padding: 0 16px; }
+.cm-bubbles { position: relative; display: flex; flex-direction: column; align-items: center; gap: 9px; margin-top: 1em; max-width: min(80vmin, 520px); padding: 0 16px; }
 .cm-bubble { padding: 10px 22px; font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; font-weight: 400; font-size: 14px; line-height: 1.55; text-align: center; animation: cm-bub 420ms cubic-bezier(0.2, 1.3, 0.4, 1) both; }
 .cm-bubble-live { opacity: 0.82; }
 @keyframes cm-bub { from { opacity: 0; transform: translateY(10px) scale(0.9); } to { opacity: 1; transform: none; } }
