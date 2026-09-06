@@ -52,23 +52,12 @@ export function tabForHash(hash: string): ShellTab | null {
 
 export default function Shell({ tabId }: { tabId: string }) {
   const active = SHELL_TABS.find((t) => t.id === tabId) ?? SHELL_TABS[0];
+  // The Intervention / Logging tab strip is parked: the page opens straight
+  // into the active surface with no chrome. The hashes still route — #/logging
+  // and #/day land on the board, #/intervention on the sky — the labels just
+  // aren't on screen.
   return (
     <div className="shell">
-      <nav className="shell-tabs" aria-label="paradigms">
-        {SHELL_TABS.map((tab) => (
-          <a
-            key={tab.id}
-            className="shell-tab"
-            href={tab.hash}
-            data-testid={`tab-${tab.id}`}
-            data-state={tab.id === active.id ? 'current' : 'idle'}
-            aria-current={tab.id === active.id ? 'page' : undefined}
-          >
-            {tab.label}
-            <span className="shell-tab-blurb">{tab.blurb}</span>
-          </a>
-        ))}
-      </nav>
       <div className="shell-body">{active.render()}</div>
     </div>
   );
