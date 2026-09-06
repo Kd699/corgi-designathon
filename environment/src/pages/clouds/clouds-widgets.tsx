@@ -5,7 +5,7 @@
 // live transcript is matched in clouds-voice.ts and the first mention of
 // sleep, recovery or strain lands the matching card.
 
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import whoop from "./whoop-sample.json";
 
 export type WidgetKind = "sleep" | "recovery" | "activity";
@@ -131,40 +131,94 @@ const CSS = /* css */ `
   55% { opacity: 1; }
   to { transform: translate(-50%, -50%) rotate(var(--cw-a, 0deg)) translateY(var(--cw-r)) rotate(calc(-1 * var(--cw-a, 0deg))); opacity: 1; filter: blur(0); }
 }
-.cw-card { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px 10px; border-radius: 18px;
+.cw-card { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px 10px; border-radius: 18px; min-width: 150px;
   background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.32); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   color: #fff; font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; text-align: left; }
 .cw-title { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.75; }
 .cw-headline { font-size: 22px; font-weight: 500; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .cw-sub { font-size: 11px; opacity: 0.82; white-space: nowrap; }
-@media (prefers-reduced-motion: reduce) { .cw-slot { animation: none; } }
+.cw-body { display: contents; }
+.cw-body > * { animation: cw-fade 320ms ease both; }
+@keyframes cw-fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+/* The skeleton: the card lands with its title and three shimmering blanks
+   the size of the headline, the chart and the sub-line, then fills in a
+   beat later — the response arriving, whether a model made it or not. */
+.cw-sk { display: block; border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.38) 50%, rgba(255,255,255,0.12) 100%);
+  background-size: 200% 100%; animation: cw-shimmer 1.15s linear infinite; }
+.cw-sk-h { width: 72px; height: 22px; margin: 1px 0; }
+.cw-sk-c { width: 114px; height: 34px; border-radius: 8px; }
+.cw-sk-s { width: 132px; height: 11px; margin: 1px 0 2px; }
+@keyframes cw-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .cw-slot { animation: none; } .cw-sk { animation: none; } .cw-body > * { animation: none; } }
 /* On the inverted (white) page the glass goes dark-on-light. */
 [data-invert="true"] .cw-card { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.18); color: #111; }
 [data-invert="true"] .cw-sub, [data-invert="true"] .cw-title { color: rgba(0,0,0,0.6); opacity: 1; }
+[data-invert="true"] .cw-sk { background-image: linear-gradient(90deg, rgba(0,0,0,0.06) 0%, rgba(0,0,0,0.16) 50%, rgba(0,0,0,0.06) 100%); }
 `;
 
 // First mention lands straight overhead, later ones fan left then right,
 // so the cards trace one arc over the circle in the order you said them.
 const ARC_ANGLES = ["0deg", "-48deg", "48deg"];
 
+const GALLERY_CSS = /* css */ `
+.cw-gallery { display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch; gap: 14px; }
+`;
+
+/** One card. It mounts as a skeleton under its title and fills in after a
+ *  jittered beat (~0.7–1.1s) — the shape of a response coming back, so the
+ *  flow reads the same with a model behind it or the local sample. */
+function Card({ kind }: { kind: WidgetKind }) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setReady(true), 700 + Math.random() * 400);
+    return () => clearTimeout(t);
+  }, []);
+  const c = CONTENT[kind];
+  return (
+    <div className="cw-card" data-ready={ready}>
+      <span className="cw-title">{c.title}</span>
+      {ready ? (
+        <span className="cw-body">
+          <span className="cw-headline">{c.headline}</span>
+          {c.chart}
+          <span className="cw-sub">{c.sub}</span>
+        </span>
+      ) : (
+        <>
+          <span className="cw-sk cw-sk-h" />
+          <span className="cw-sk cw-sk-c" />
+          <span className="cw-sk cw-sk-s" />
+        </>
+      )}
+    </div>
+  );
+}
+
 export function WidgetArc({ kinds }: { kinds: WidgetKind[] }) {
   if (kinds.length === 0) return null;
   return (
     <div className="cw-arc">
       <style>{CSS}</style>
-      {kinds.map((kind, i) => {
-        const c = CONTENT[kind];
-        return (
-          <div key={kind} className="cw-slot" style={{ "--cw-a": ARC_ANGLES[i % ARC_ANGLES.length] } as CSSProperties}>
-            <div className="cw-card">
-              <span className="cw-title">{c.title}</span>
-              <span className="cw-headline">{c.headline}</span>
-              {c.chart}
-              <span className="cw-sub">{c.sub}</span>
-            </div>
-          </div>
-        );
-      })}
+      {kinds.map((kind, i) => (
+        <div key={kind} className="cw-slot" style={{ "--cw-a": ARC_ANGLES[i % ARC_ANGLES.length] } as CSSProperties}>
+          <Card kind={kind} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The same cards the voice session pulls out, laid flat — the /widgets
+ *  page. Defaults to all of them. */
+export function WidgetGallery({ kinds }: { kinds?: WidgetKind[] }) {
+  const shown = kinds ?? (Object.keys(WIDGET_TRIGGERS) as WidgetKind[]);
+  return (
+    <div className="cw-gallery">
+      <style>{CSS + GALLERY_CSS}</style>
+      {shown.map((kind) => (
+        <Card key={kind} kind={kind} />
+      ))}
     </div>
   );
 }

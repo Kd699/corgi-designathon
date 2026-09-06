@@ -4,6 +4,7 @@ import App from './App';
 import DailyOpenLab from './pages/DailyOpenLab';
 import DayboardPage from './pages/DayboardPage';
 import CloudsPage from './pages/clouds/page';
+import WidgetsPage from './pages/widgets/page';
 import { AgentationSidePanelBridge } from './dev/agentation-side-panel-bridge';
 import './index.css';
 
@@ -19,6 +20,11 @@ function isClouds(path: string, hash: string) {
   return path === '/clouds' || path.startsWith('/clouds/') || hash.startsWith('#/clouds');
 }
 
+/* /widgets — the voice session's WHOOP cards on their own page. */
+function isWidgets(path: string, hash: string) {
+  return path === '/widgets' || path.startsWith('/widgets/') || hash.startsWith('#/widgets');
+}
+
 function Root() {
   const [loc, setLoc] = useState(() => ({ path: window.location.pathname, hash: window.location.hash }));
   useEffect(() => {
@@ -31,6 +37,7 @@ function Root() {
     };
   }, []);
   if (isClouds(loc.path, loc.hash)) return <CloudsPage />;
+  if (isWidgets(loc.path, loc.hash)) return <WidgetsPage />;
   if (loc.hash.startsWith('#/day')) return <DayboardPage />;
   return loc.hash.startsWith('#/app') ? <App /> : <DailyOpenLab />;
 }
