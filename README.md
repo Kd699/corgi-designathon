@@ -1,48 +1,84 @@
-# Spacetime - a stateful environment
+# Corgi Designathon
 
-Designathon repo. The idea in one line:
-
-> Spacetime is not a chat app with themes. It is an environment whose state changes as **your** state, context and objective change.
-
-A normal adaptive UI says "you selected X, so I show X". This one says "given what is happening right now, this is the environment you are in". And if the environment responds meaningfully to what you do, interacting with it becomes rewarding in itself.
-
-## Run it
+Two things live here. Clone once, get both.
 
 ```
-npm install
-npm run dev        # http://localhost:5300
-npm test           # rules tests
+budget/        the Budget Management app  (the product)
+environment/   the stateful-environment prototype  (the concept)
+docs/          the brief, open questions, screenshots
 ```
 
-No keys, no backend. Open it on your phone on the same wifi and DeviceMotion feeds in for real.
+## Run them
 
-## The five mechanisms
+```
+cd budget && npm install && npm run dev          # http://localhost:5173
+cd environment && npm install && npm run dev     # http://localhost:5300
+```
 
-| Mechanism | What it does | Where in code |
-|---|---|---|
-| Mood | You rate 1-5; background, texture, type and headline shift | `MoodRater`, `deriveValence` |
-| Passive inputs | Heart rate (simulated watch), motion (cursor / DeviceMotion), time of day, idle. Nothing to fill in | `src/engine/sources.ts` |
-| Mascot | A persistent character whose state and motion react (calm, curious, alert, frazzled, asleep) | `src/ui/Mascot.tsx` |
-| Objective | Settle / Focus / Wander / Root decide which components exist at all | `componentsFor` in `derive.ts` |
-| Course correction | "Did the environment get it right?" yes/no nudges future reads, capped so it cannot override a fresh rating | `feedback` in `deriveValence` |
+Both are React + TypeScript + Vite. No keys, no backend, no accounts.
 
-Root (press-R recursive questioning from the earlier CBT prototype) is included as one objective, with an offline mock question source.
+## budget/ - the product
 
-## The one rule of the codebase
+Decentralised budget management. People and departments hold points, budget flows
+down a hierarchy, managers request and reclaim, and automation rules top people up
+on a schedule.
+
+- `src/App.tsx` is the orchestrator (it is large, ~2.8k lines).
+- `src/store/budget.ts` is the zustand store: people, departments, allocation, automation rules, exceptions.
+- `src/components/PrototypingOverlay.tsx` is the useful bit for a designathon. Buttons at the
+  bottom of the screen switch you between Mhlengi (admin) and Morgan Freeman (manager),
+  and between centralised and decentralised models, with no login.
+- shadcn/radix primitives in `src/components/ui/`.
+
+Carried over at the latest commit of the original repo, `e46a7f78c`. Two unreferenced
+and syntactically broken files (`App.clean.tsx`, `App.new.tsx`) were moved to
+`budget/attic/` so `npm run build` passes; see the note in there.
+
+## environment/ - the concept
+
+> Not a chat app with themes. An environment whose state changes as **your** state,
+> context and objective change.
+
+A normal adaptive UI says "you selected X, so I show X". This one says "given what is
+happening right now, this is the environment you are in". Five mechanisms:
+
+| Mechanism | What it does |
+|---|---|
+| Mood | You rate 1-5; background, texture, type and headline shift |
+| Passive inputs | Heart rate (simulated watch), motion (cursor / DeviceMotion), time of day, idle. Nothing to fill in |
+| Mascot | A persistent character that reacts: calm, curious, alert, frazzled, asleep |
+| Objective | Settle / Focus / Wander / Root decide which components exist at all |
+| Course correction | "Did the environment get it right?" nudges future reads, capped so it cannot override a fresh rating |
+
+One rule holds the codebase together:
 
 ```
 signals  ->  derive()  ->  EnvSpec  ->  render
 ```
 
-`derive(signals)` in `src/engine/derive.ts` is the only place that decides what the environment looks like. It is pure (no DOM, no clock) and returns a spec with every visual axis as an explicit field: palette, texture, type, mascot, components, headline. Renderers read fields. They never look at raw signals and never branch on them.
+`derive(signals)` in `environment/src/engine/derive.ts` is the only place that decides
+what the environment looks like. Pure, no DOM, no clock. It returns a spec where every
+visual axis is an explicit field. Renderers read fields and never branch on raw signals.
 
-So:
-- Want a new visual reaction? Add a field to `EnvSpec`, compute it in `derive`, read it in a renderer.
-- Want a new input? Add it to `Signals`, write a source hook, use it in `derive`.
-- Want to tune the feel? Edit numbers in `derive.ts` and watch the Signals panel, which prints the reasons for every decision.
+- New visual reaction? Add a field to `EnvSpec`, compute it in `derive`, read it in a renderer.
+- New input? Add it to `Signals`, write a source hook, use it in `derive`.
+- Tuning the feel? Edit numbers in `derive.ts`. The Signals panel prints the reason for every decision.
 
-Tests in `derive.test.ts` pin the behaviours we care about (passive input alone changes the environment, objective decides components, feedback is capped).
+`npm test` in `environment/` pins the behaviours that matter (passive input alone changes
+the environment, objective decides components, feedback is capped).
 
-## Open questions for the team
+## Where they meet
 
-See `docs/BRIEF.md`. The big one: **which real-world signals should be allowed to change the environment without the user saying anything, and where is the line between "responsive" and "creepy"?**
+That is the designathon question. The budget app is where money stress actually lives:
+someone asking for budget, someone being told no, someone watching a number they do not
+control. The environment layer is a way to make an interface respond to the state a
+person is in while they do that, instead of presenting the same flat surface to everyone.
+
+Open questions are in `docs/BRIEF.md`. The big one: which real-world signals should be
+allowed to change the environment without the user saying anything, and where is the
+line between responsive and creepy?
+
+## Screenshots
+
+In `docs/`: the budget app, and the environment in three states (steady, low mood,
+high heart rate on Focus).

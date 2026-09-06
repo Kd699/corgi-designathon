@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+ 
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 20%;
+    
+    --card: 0 0% 98%;
+    --card-foreground: 0 0% 20%;
+ 
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 20%;
+ 
+    --primary: 225 70% 58%;
+    --primary-foreground: 0 0% 100%;
+ 
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 20%;
+ 
+    --muted: 0 0% 40%;
+    --muted-foreground: 0 0% 40%;
+ 
+    --accent: 225 70% 58%;
+    --accent-foreground: 0 0% 100%;
+
+    --medal: 43 100% 45%;
+    --medal-foreground: 0 0% 100%;
+ 
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 225 70% 58%;
+ 
+    --radius: 0.75rem;
+  }
+}
+ 
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-[#F5F5F5] text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  @keyframes check {
+    0% {
+      transform: scale(0.5);
+      opacity: 0;
+    }
+    25% {
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.2);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes fade-up {
+    0% {
+      transform: translateY(10px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .animate-check {
+    animation: check 0.4s cubic-bezier(.17,.67,.24,1.03) forwards;
+  }
+
+  .animate-fade-up {
+    animation: fade-up 0.3s ease-out forwards;
+  }
+}
