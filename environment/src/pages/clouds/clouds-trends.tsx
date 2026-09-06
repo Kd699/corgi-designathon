@@ -47,33 +47,42 @@ const DATA: Record<TrendScope, { good: Row[]; bad: Row[] }> = {
 };
 
 const CSS = /* css */ `
-/* Dark on purpose, whatever the page: the trends card is the WHOOP read
-   quoted inside the sky's own white-card column. */
-.ct { border-radius: 20px; padding: 16px 16px 14px; background: #131519; color: #fff;
+/* A white card like the session cards — the same sheet the mascot is cut
+   from — with the read's title set inside it. */
+.ct { border-radius: 20px; padding: 16px 18px 15px; background: #fff; color: #111;
   font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; text-align: left;
-  border: 1px solid rgba(255,255,255,0.06); }
-.ct-title { margin: 2px 2px 12px; font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255,255,255,0.55); }
-.ct-group { margin: 14px 2px 8px; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.4); }
-.ct-row { border-radius: 12px; padding: 11px 13px 12px; background: #1d2026; margin-bottom: 8px; }
+  border: 1px solid rgba(0,0,0,0.08); }
+.ct-title { margin: 2px 0 14px; font-family: 'PP Editorial Old', ui-serif, Georgia, serif; font-weight: 400;
+  font-size: 23px; line-height: 1.15; }
+.ct-group { margin: 14px 2px 8px; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(0,0,0,0.42); }
+.ct-row { border-radius: 12px; padding: 11px 13px 12px; background: rgba(0,0,0,0.035); margin-bottom: 8px; }
 .ct-row:last-child { margin-bottom: 0; }
 .ct-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
 .ct-label { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 1.3; }
 .ct-pct { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.ct-pct[data-tone="good"] { color: #58d68d; }
-.ct-pct[data-tone="bad"] { color: #f5a623; }
-/* The hatched track, the filled bar, the dot riding its end. */
+.ct-pct[data-tone="good"] { color: #1f9d55; }
+.ct-pct[data-tone="bad"] { color: #d98200; }
+/* A DIVERGING bar: the hatched track runs the row, a centre mark holds the
+   zero, and the fill grows FROM the middle — green to the right, orange to
+   the left — so lift and drag read as directions, not just lengths. */
 .ct-track { position: relative; height: 7px; border-radius: 999px; overflow: visible;
-  background: repeating-linear-gradient(135deg, rgba(255,255,255,0.10) 0 2.5px, transparent 2.5px 6px); }
-.ct-fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 999px; min-width: 10px; }
-.ct-fill[data-tone="good"] { background: #58d68d; }
-.ct-fill[data-tone="bad"] { background: #f5a623; }
-.ct-fill::after { content: ""; position: absolute; right: -2px; top: 50%; width: 5px; height: 5px;
+  background: repeating-linear-gradient(135deg, rgba(0,0,0,0.10) 0 2.5px, transparent 2.5px 6px); }
+.ct-track::before { content: ""; position: absolute; left: 50%; top: -2.5px; bottom: -2.5px; width: 1.5px;
+  transform: translateX(-50%); border-radius: 1px; background: rgba(0,0,0,0.3); }
+.ct-fill { position: absolute; top: 0; height: 100%; min-width: 8px; }
+.ct-fill[data-tone="good"] { left: 50%; background: #34c26b; border-radius: 0 999px 999px 0; }
+.ct-fill[data-tone="bad"] { right: 50%; background: #f5a623; border-radius: 999px 0 0 999px; }
+.ct-fill::after { content: ""; position: absolute; top: 50%; width: 5px; height: 5px;
   transform: translateY(-50%); border-radius: 999px; background: #fff; }
+.ct-fill[data-tone="good"]::after { right: 2px; }
+.ct-fill[data-tone="bad"]::after { left: 2px; }
 `;
 
 function TrendRow({ row, max }: { row: Row; max: number }) {
   const tone = row.pct >= 0 ? "good" : "bad";
-  const width = `${Math.round((Math.abs(row.pct) / max) * 100)}%`;
+  // Half the track is the whole scale: the fill leaves the centre mark and
+  // the biggest effect just reaches its end of the row.
+  const width = `${Math.round((Math.abs(row.pct) / max) * 50)}%`;
   return (
     <div className="ct-row">
       <div className="ct-head">
@@ -95,7 +104,7 @@ export default function TrendsCard({ scope }: { scope: TrendScope }) {
   return (
     <article className="ct" aria-label="Mood trends">
       <style>{CSS}</style>
-      <div className="ct-title">Mood impact · {scope === "week" ? "this week" : "this month"}</div>
+      <h3 className="ct-title">Mood impact</h3>
       <div className="ct-group">Lifts your mood</div>
       {good.map((row) => (
         <TrendRow key={row.label} row={row} max={max} />
