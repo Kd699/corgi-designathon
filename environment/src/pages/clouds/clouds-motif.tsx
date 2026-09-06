@@ -30,7 +30,7 @@ export const MOTIF_MOODS: readonly MotifMood[] = [
   "Asleep",
 ];
 
-type FaceSpec = {
+export type FaceSpec = {
   /** (valence+1)/2 and arousal — the blob outline's two inputs. */
   pleasant: number;
   energy: number;
@@ -48,7 +48,7 @@ type FaceSpec = {
 // Excited (v .8, a .9), Tense (v -.7, a .85), Content (v .6, a .3),
 // Weary (v -.6, a .25), Asleep (idle, calm middle). Eye heights run taller
 // than the study's — long rounded capsules, the Grok-companion read.
-const SPECS: Record<MotifMood, FaceSpec> = {
+export const SPECS: Record<MotifMood, FaceSpec> = {
   Excited: { pleasant: 0.9, energy: 0.9, eyeHeight: 27, eyeTilt: -12, mouthCurve: 10.5, browTilt: 20, browOpacity: 0, blinkSeconds: 3.75, gazePixels: 3.7, asleep: false },
   Tense: { pleasant: 0.15, energy: 0.85, eyeHeight: 25, eyeTilt: 15, mouthCurve: -8.5, browTilt: 20, browOpacity: 0.6, blinkSeconds: 3.9, gazePixels: 3.6, asleep: false },
   Content: { pleasant: 0.8, energy: 0.3, eyeHeight: 22, eyeTilt: -8, mouthCurve: 5.7, browTilt: -20, browOpacity: 0, blinkSeconds: 5.25, gazePixels: 1.9, asleep: false },
@@ -70,7 +70,7 @@ const THEME_MOODS: Record<VoiceTheme, MotifMood> = {
  *  superellipse that rounds as pleasant rises, scalloped edges when
  *  pleasant energy is high, notched cuts when unpleasant energy is high.
  *  64 points for every mood, so d: path() transitions can interpolate. */
-function blobPath(pleasant: number, energy: number, size = 46): string {
+export function blobPath(pleasant: number, energy: number, size = 46): string {
   const exponent = 5 - pleasant * 3;
   const points = Array.from({ length: 64 }, (_, i) => {
     const angle = (i * Math.PI * 2) / 64;
