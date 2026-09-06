@@ -81,7 +81,7 @@ import "dialkit/styles.css";
 import WispsCanvas from "./clouds-wisps";
 import CloudsMotif, { MOTIF_MOODS } from "./clouds-motif";
 import SessionHistory, { isEmptyRead, loadHistory, saveHistory, type HistoryItem } from "./clouds-history";
-import type { SessionRead } from "./clouds-session";
+import { summariseDay, type DayPicture, type SessionRead } from "./clouds-session";
 import { THEME_SKY } from "./clouds-voice";
 import { moodForSky, readForSky } from "./clouds-signals";
 import {
@@ -499,6 +499,27 @@ export default function CloudsScene() {
     });
   };
 
+  // THE GENERAL PICTURE. Two or more check-ins today and the read under
+  // the mood groups them (clouds-session.ts summariseDay) instead of
+  // quoting only the latest; one at most, and the single read stands.
+  const [picture, setPicture] = useState<DayPicture | null>(null);
+  useEffect(() => {
+    const today = history.filter(
+      (h) => new Date(h.at).toDateString() === new Date().toDateString()
+    );
+    if (today.length < 2) {
+      setPicture(null);
+      return;
+    }
+    let alive = true;
+    summariseDay(today).then((p) => {
+      if (alive) setPicture(p);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [history]);
+
   // Scrolling into the history fades the motif — shape, greeting, read —
   // while the sky (a fixed canvas) stays exactly where it is. One CSS var,
   // written on scroll, read by .cm-stage.
@@ -597,6 +618,7 @@ export default function CloudsScene() {
         onTheme={(sky) => setValue("sky", sky)}
         circleReveal={values.experimental?.circleReveal ?? false}
         session={session}
+        picture={picture}
         onSession={onSession}
         neutral={history.length === 0 && !session}
         onLive={setVoiceLive}

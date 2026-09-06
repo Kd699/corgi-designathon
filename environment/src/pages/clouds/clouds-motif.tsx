@@ -31,7 +31,7 @@ import { SKY_PRESETS, cssPaletteFor, type SkyPresetName } from "./sky";
 import { useVoice, type VoiceTheme } from "./clouds-voice";
 import { WidgetArc } from "./clouds-widgets";
 import TextFlow from "./clouds-textflow";
-import { summariseSession, type SessionRead } from "./clouds-session";
+import { summariseSession, type DayPicture, type SessionRead } from "./clouds-session";
 
 export type MotifMood = "Content" | "Excited" | "Tense" | "Weary" | "Asleep";
 export const MOTIF_MOODS: readonly MotifMood[] = [
@@ -241,6 +241,7 @@ export default function CloudsMotif({
   onTheme,
   onSession,
   onLive,
+  picture = null,
 }: {
   mood: MotifMood;
   /** The read behind the mood (clouds-signals.ts) — signal citations
@@ -268,6 +269,9 @@ export default function CloudsMotif({
   /** Tracks the voice session (listening or thinking) — the scene hides
    *  the history list while one is live. */
   onLive?: (live: boolean) => void;
+  /** The day so far, grouped: with 2+ check-ins today the read shows this
+   *  general picture instead of quoting only the latest session. */
+  picture?: DayPicture | null;
 }) {
   const face = neutral ? NEUTRAL : SPECS[mood] ?? SPECS.Content;
 
@@ -577,15 +581,23 @@ export default function CloudsMotif({
         </div>
       )}
       {!live && session && (
-        <p className="cm-read" data-read-source={session.source} key={session.heading}>
-          {session.summary} <span className="cm-pill">{session.mood}</span>
-          {session.source === "local" && <span className="cm-pill">local read</span>}
+        <p className="cm-read" data-read-source={(picture ?? session).source} key={picture ? picture.text : session.heading}>
+          {/* One check-in: its own read. More: the day grouped. */}
+          {picture ? picture.text : session.summary} <span className="cm-pill">{session.mood}</span>
+          {picture && <span className="cm-pill">{picture.count} check-ins</span>}
+          {(picture ?? session).source === "local" && <span className="cm-pill">local read</span>}
         </p>
       )}
-      {!live && !session && neutral && (
+      {!live && !session && picture && (
+        <p className="cm-read" data-read-source={picture.source} key={picture.text}>
+          {picture.text} <span className="cm-pill">{picture.count} check-ins</span>
+          {picture.source === "local" && <span className="cm-pill">local read</span>}
+        </p>
+      )}
+      {!live && !session && !picture && neutral && (
         <p className="cm-read">Tap the motif to log how you're feeling, or type it below.</p>
       )}
-      {!live && !session && !neutral && summary && (
+      {!live && !session && !picture && !neutral && summary && (
         <p className="cm-read">
           {summary.map((seg, i) =>
             typeof seg === "string" ? (

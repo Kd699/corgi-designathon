@@ -70,6 +70,90 @@ export async function summariseSession(transcript: string, ctx: SessionContext):
   }
 }
 
+// THE GENERAL PICTURE. With more than one session logged today, the read
+// under the mood stops quoting the latest check-in and groups them: one or
+// two sentences on the day's thread — where it started, where it turned,
+// where it sits now. Model when the key answers, a local composition when
+// it doesn't; either way the same shape back.
+
+/** What the picture needs from a history item (clouds-history.tsx owns the
+ *  full type; keeping this structural avoids a circular import). */
+export type PictureItem = {
+  heading: string;
+  summary: string;
+  mood: MotifMood;
+  theme: SessionTheme;
+  at: string;
+};
+
+export type DayPicture = { text: string; count: number; source: "openai" | "local" };
+
+export async function summariseDay(items: PictureItem[]): Promise<DayPicture> {
+  const take = items.slice(-6);
+  try {
+    return { text: await pictureViaOpenAI(take), count: items.length, source: "openai" };
+  } catch (e) {
+    console.info("[clouds] day picture fell back to local:", e instanceof Error ? e.message : e);
+    return { text: localPicture(take), count: items.length, source: "local" };
+  }
+}
+
+const PICTURE_SYSTEM = `You get the check-ins someone logged today, oldest first — each one already summarised. Hand back the general picture of their day so far.
+
+Return ONLY JSON, no prose around it:
+{ "text": string }  // 1-2 sentences, second person ("you"). The thread of the day: where it started, where it turned if it turned, where it sits now. Quote their own details sparingly. No advice, no moralising, no list.`;
+
+async function pictureViaOpenAI(items: PictureItem[]): Promise<string> {
+  if (items.length === 0) throw new Error("nothing logged");
+  const lines = items
+    .map((it) => {
+      const time = new Date(it.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      return `${time} — ${it.heading}: ${it.summary} (mood: ${it.mood}${it.theme ? `, theme: ${it.theme}` : ""})`;
+    })
+    .join("\n");
+  const res = await fetch("/api/openai", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      temperature: 0.4,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: PICTURE_SYSTEM },
+        { role: "user", content: lines },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`openai ${res.status}: ${(await res.text()).slice(0, 160)}`);
+  const json = await res.json();
+  const content = json?.choices?.[0]?.message?.content;
+  if (!content) throw new Error("openai returned no content");
+  const text = String((JSON.parse(content) as { text?: unknown }).text ?? "").trim();
+  if (!text) throw new Error("openai picture was empty");
+  return text;
+}
+
+const THEME_WORDS: Record<Exclude<SessionTheme, null>, string> = {
+  happy: "upbeat",
+  anxious: "wound up",
+  sad: "low",
+  calm: "settled",
+};
+const COUNT_WORDS = ["", "one", "two", "three", "four", "five", "six"];
+
+export function localPicture(items: PictureItem[]): string {
+  const n = items.length;
+  const count = COUNT_WORDS[n] ?? String(n);
+  const first = items.find((it) => it.theme)?.theme ?? null;
+  const last = [...items].reverse().find((it) => it.theme)?.theme ?? null;
+  if (first && last && first !== last) {
+    return `Across ${count} check-ins today you've moved from ${THEME_WORDS[first]} to ${THEME_WORDS[last]}; most recently: ${items[items.length - 1].heading.toLowerCase()}.`;
+  }
+  if (last) {
+    return `Across ${count} check-ins today the thread has stayed ${THEME_WORDS[last]}; most recently: ${items[items.length - 1].heading.toLowerCase()}.`;
+  }
+  return `You've checked in ${count} times today; the tone has been hard to pin down from the words alone.`;
+}
+
 async function viaOpenAI(text: string, ctx: SessionContext): Promise<SessionRead> {
   if (!text) throw new Error("nothing said");
   const res = await fetch("/api/openai", {
