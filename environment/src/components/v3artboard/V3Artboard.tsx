@@ -1,963 +1,1028 @@
-// V3Artboard runtime component
-//
-// Built 2026-05-25. Implements the may-22 contract:
-//   - Sidebar (brand + viewer/artboard toggle + platform toggle + zoom + sections + context)
-//   - Viewer (renderFrame scaled-to-fit, fullScreenViewer opt-out for app-shell modes)
-//   - Artboard (declarative dispatch of renderArtboardFrame per spec)
-//   - FloatingViewerNav with may-22 collapsed-pill-hover-to-expand behaviour
-//   - Keyboard nav (Arrow keys, Cmd+1/2)
-//   - ctrl-scroll zoom
-//   - Click-frame-to-route (artboard frame -> viewer)
-//
-// Deferred (surface as known limits in lab terminus reports):
-//   - Dev-mode inspector overlay + tokens.ts registry (P9). Toggle exists, no
-//     resolution yet. Inspector card is informational placeholder only.
-//   - localStorage / URL-hash persistence (E5, E6).
-//   - Imperative ref API (E7).
-//   - LossTest companion (E14).
-//   - COMPONENT_FOCUS_REGISTRY third surface (E9).
-//   - CSS-variable theming (E11) — Perkbox-ish defaults inlined.
-
-import React, {
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react'
-import { PhoneFrame, DesktopFrame, NativeFrame, FrameBleedContext } from './frames'
+import React, { useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type {
-  ArtboardFrameRef,
-  ArtboardSection,
-  ContextCard,
-  ContextTone,
-  Platform,
-  ScreenMode,
-  ScreenState,
   V3ArtboardSpec,
+  ScreenMode,
+  ScreenPlatform,
+  SidebarSection,
+  ArtboardSection,
+  ArtboardStep,
+  ArtboardFrameRef,
+  ViewMode,
+  V3ArtboardTheme,
+  ComponentFocusConfigResolved,
 } from './types'
+import {
+  validateSpec,
+  autoWrapFrame,
+  loadPersisted,
+  savePersisted,
+  parseHash,
+  serializeHash,
+  buildThemeStyle,
+  deriveSidebarFromModes,
+  isAutoSidebar,
+  autoSectionTitle,
+  autoSectionMeta,
+  resolveComponentFocus,
+} from './internal/runtime'
+import { ComponentFocusPanel, ComponentFocusDetailPanel } from './internal/component-focus'
+import { Sidebar, type SidebarTab } from './internal/sidebar'
+import { DevModeProvider } from '@/components/dev-mode/provider'
+import { DevPanel } from '@/components/dev-mode/panel'
+import { useDevMode } from '@/lib/devMode'
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+const PLATFORM_LABELS: Record<ScreenPlatform, string> = { web: 'Desktop', mobile: 'Mobile', native: 'Native' }
+const PLATFORM_WIDTH: Record<ScreenPlatform, number> = { web: 1440, mobile: 358, native: 358 }
+const PLATFORM_HEIGHT: Record<ScreenPlatform, number> = { web: 800, mobile: 780, native: 780 }
+const DEFAULT_WELCOME_HELP = [
+  { kbd: 'Cmd / Ctrl + scroll', text: 'Zoom in & out' },
+  { kbd: 'Click any frame',     text: 'Open the live viewer' },
+  { kbd: 'Sidebar',              text: 'Jump between flows + states' },
+  { kbd: '←  →',                 text: 'Step prev / next' },
+]
 
-const PANEL_WIDTH = 260
-// Tailwind `md` breakpoint. Below this the sidebar becomes an off-canvas drawer
-// so the viewer is usable on a phone (per /v3artboard-may-22 mobile-viewer rule).
-const MOBILE_BP = 768
+/* ── Layout primitives ────────────────────────────────────────────────── */
 
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(
-    () => typeof window !== 'undefined' && window.innerWidth < MOBILE_BP,
-  )
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < MOBILE_BP)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
-  return isMobile
-}
-
-const PLATFORM_LABEL: Record<Platform, string> = {
-  web: 'Desktop',
-  mobile: 'Mobile',
-  native: 'Native',
-}
-
-const PLATFORM_SHORT: Record<Platform, string> = {
-  web: 'D',
-  mobile: 'M',
-  native: 'N',
-}
-
-const TONE_STYLE: Record<ContextTone, string> = {
-  info: 'bg-blue-50 border-blue-200 text-blue-900',
-  warn: 'bg-amber-50 border-amber-200 text-amber-900',
-  success: 'bg-emerald-50 border-emerald-200 text-emerald-900',
-  neutral: 'bg-gray-50 border-gray-200 text-gray-900',
-}
-
-type FlatRoute = {
-  key: string
-  modeId: string
-  stateId: string
-  platform: Platform
-  label: string
-  sectionLabel: string
-}
-
-function buildFlatRoutes(
-  modes: ScreenMode[],
-  sidebar: V3ArtboardSpec['sidebar'],
-): FlatRoute[] {
-  if (sidebar && sidebar.length) {
-    return sidebar.flatMap((section) =>
-      section.items.flatMap((item) =>
-        item.options.map((opt) => ({
-          key: `${opt.modeId}/${opt.stateId}/${opt.platform}`,
-          modeId: opt.modeId,
-          stateId: opt.stateId,
-          platform: opt.platform,
-          label: item.label,
-          sectionLabel: section.sectionLabel,
-        })),
-      ),
-    )
-  }
-  return modes.flatMap((m) =>
-    m.states.flatMap((s) =>
-      m.platforms.map((p) => ({
-        key: `${m.id}/${s.id}/${p}`,
-        modeId: m.id,
-        stateId: s.id,
-        platform: p,
-        label: `${m.label} - ${s.label}`,
-        sectionLabel: m.label,
-      })),
-    ),
-  )
-}
-
-function findMode(modes: ScreenMode[], id: string): ScreenMode | undefined {
-  return modes.find((m) => m.id === id)
-}
-
-function findState(mode: ScreenMode | undefined, id: string): ScreenState | undefined {
-  return mode?.states.find((s) => s.id === id)
-}
-
-// Auto-wrap bare content in a platform frame (E10). Skipped when rawFrame:true.
-function wrapForArtboard(
-  node: ReactNode,
-  platform: Platform,
-  raw: boolean | undefined,
-): ReactNode {
-  if (raw) return node
-  if (platform === 'mobile') return <PhoneFrame>{node}</PhoneFrame>
-  if (platform === 'native') return <NativeFrame>{node}</NativeFrame>
-  return <DesktopFrame>{node}</DesktopFrame>
-}
-
-// ---------------------------------------------------------------------------
-// FloatingViewerNav (may-22 collapsed-pill, hover-to-expand)
-// ---------------------------------------------------------------------------
-
-interface FloatingNavProps {
-  routes: FlatRoute[]
-  currentIdx: number
-  onPrev: () => void
-  onNext: () => void
-  platform: Platform
-  availablePlatforms: Platform[]
-  onPlatform: (p: Platform) => void
-  viewMode: 'viewer' | 'artboard'
-  onViewMode: (m: 'viewer' | 'artboard') => void
-  devMode: boolean
-  onDevMode: () => void
-  onHelp: () => void
-  labelOverride?: string
-}
-
-const FloatingViewerNav: React.FC<FloatingNavProps> = ({
-  routes,
-  currentIdx,
-  onPrev,
-  onNext,
-  onViewMode,
-  labelOverride,
-}) => {
-  // Simplified island (user 2026-06-07): back · truncated title · forward · ✕→bird's-eye.
-  // Replaces the may-22 hover-to-expand pill; platform/dev/help live in the sidebar.
-  const current = routes[currentIdx]
-  const label = labelOverride ?? current?.label ?? '—'
-
-  return (
-    <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[80]">
-      <div className="flex items-center gap-0.5 bg-black/85 backdrop-blur text-white rounded-full px-1 py-1 shadow-lg max-w-[88vw]">
-        <NavBtn onClick={onPrev} disabled={currentIdx <= 0} title="Previous (←)">
-          ←
-        </NavBtn>
-        <span
-          className="px-2 text-[12px] truncate max-w-[44vw] sm:max-w-[220px] text-white/90"
-          title={label}
-        >
-          {label}
-        </span>
-        <NavBtn onClick={onNext} disabled={currentIdx >= routes.length - 1} title="Next (→)">
-          →
-        </NavBtn>
-        <NavBtn onClick={() => onViewMode('artboard')} title="Bird's-eye">
-          ✕
-        </NavBtn>
-      </div>
-    </div>
-  )
-}
-
-const NavBtn: React.FC<{
-  onClick: () => void
-  disabled?: boolean
-  active?: boolean
-  title?: string
-  children: ReactNode
-}> = ({ onClick, disabled, active, title, children }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    title={title}
-    className={`rounded-full text-xs px-2.5 py-1 transition-colors ${
-      active ? 'bg-white text-black' : 'text-white/80 hover:bg-white/15 disabled:opacity-30 disabled:hover:bg-transparent'
-    }`}
+const StepBadge: React.FC<{ value: number | string; color?: string }> = ({ value, color = '#03072d' }) => (
+  <div
+    className="flex items-center justify-center rounded-full text-white text-xs font-bold shrink-0"
+    style={{ width: 24, height: 24, background: color }}
   >
-    {children}
-  </button>
-)
-
-
-// ---------------------------------------------------------------------------
-// Sidebar
-// ---------------------------------------------------------------------------
-
-interface SidebarProps {
-  spec: V3ArtboardSpec
-  viewMode: 'viewer' | 'artboard'
-  onViewMode: (m: 'viewer' | 'artboard') => void
-  platform: Platform
-  onPlatform: (p: Platform) => void
-  availablePlatforms: Platform[]
-  zoom: number
-  onZoom: (z: number) => void
-  currentKey: string
-  onPick: (modeId: string, stateId: string, platform: Platform) => void
-  mobileOpen?: boolean
-  onClose?: () => void
-}
-
-const Sidebar: React.FC<SidebarProps> = ({
-  spec,
-  viewMode,
-  onViewMode,
-  platform,
-  onPlatform,
-  availablePlatforms,
-  zoom,
-  onZoom,
-  currentKey,
-  onPick,
-  mobileOpen = false,
-  onClose,
-}) => (
-  <aside
-    className={`fixed top-0 left-0 h-screen bg-white border-r border-gray-200 flex flex-col overflow-hidden z-[60] transition-transform duration-300 md:translate-x-0 md:shadow-none ${
-      mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
-    }`}
-    style={{ width: PANEL_WIDTH }}
-  >
-    {onClose && (
-      <button
-        onClick={onClose}
-        aria-label="Close menu"
-        className="md:hidden absolute top-3 right-3 z-10 w-7 h-7 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100"
-      >
-        ✕
-      </button>
-    )}
-    <div className="px-4 py-4 border-b border-gray-100">
-      <div className="flex items-center gap-2 mb-1">
-        {spec.brand.icon && <span className="text-base">{spec.brand.icon}</span>}
-        <h1 className="text-sm font-bold text-gray-900 truncate">{spec.brand.title}</h1>
-      </div>
-      {spec.brand.subtitle && (
-        <p className="text-[11px] text-gray-500">{spec.brand.subtitle}</p>
-      )}
-    </div>
-
-    <div className="px-4 py-3 border-b border-gray-100 space-y-2.5">
-      <div>
-        <p className="text-[9px] uppercase tracking-widest text-gray-400 mb-1">Surface</p>
-        <div className="flex gap-1">
-          <SegBtn active={viewMode === 'viewer'} onClick={() => onViewMode('viewer')}>
-            Viewer
-          </SegBtn>
-          <SegBtn active={viewMode === 'artboard'} onClick={() => onViewMode('artboard')}>
-            Bird's-eye
-          </SegBtn>
-        </div>
-      </div>
-
-      {availablePlatforms.length > 1 && (
-        <div>
-          <p className="text-[9px] uppercase tracking-widest text-gray-400 mb-1">Platform</p>
-          <div className="flex gap-1">
-            {availablePlatforms.map((p) => (
-              <SegBtn key={p} active={platform === p} onClick={() => onPlatform(p)}>
-                {PLATFORM_LABEL[p]}
-              </SegBtn>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Zoom only affects bird's-eye (artboard). Viewer always renders 1:1. */}
-      {viewMode === 'artboard' && (
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-[9px] uppercase tracking-widest text-gray-400">Zoom</p>
-            <span className="text-[10px] text-gray-500">{Math.round(zoom * 100)}%</span>
-          </div>
-          <input
-            type="range"
-            min={0.1}
-            max={1}
-            step={0.05}
-            value={zoom}
-            onChange={(e) => onZoom(parseFloat(e.target.value))}
-            className="w-full"
-          />
-        </div>
-      )}
-    </div>
-
-    <nav className="flex-1 overflow-y-auto px-2 py-3">
-      {(spec.sidebar ?? []).map((section) => (
-        <div key={section.sectionLabel} className="mb-4">
-          <p className="px-2 text-[9px] uppercase tracking-widest text-gray-400 mb-1.5">
-            {section.sectionLabel}
-          </p>
-          <div className="space-y-0.5">
-            {section.items.map((item) => {
-              const primary = item.options[0]
-              const matches = item.options.some(
-                (o) => `${o.modeId}/${o.stateId}/${o.platform}` === currentKey,
-              )
-              return (
-                <button
-                  key={item.id}
-                  onClick={() =>
-                    onPick(primary.modeId, primary.stateId, primary.platform)
-                  }
-                  className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
-                    matches
-                      ? 'bg-gray-900 text-white'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate">{item.label}</span>
-                    <span
-                      className={`flex gap-0.5 shrink-0 ${matches ? 'text-white/50' : 'text-gray-400'}`}
-                    >
-                      {item.options.map((o) => (
-                        <span
-                          key={o.platform}
-                          className="text-[9px] font-mono"
-                        >
-                          {o.platformLabel ?? PLATFORM_SHORT[o.platform]}
-                        </span>
-                      ))}
-                    </span>
-                  </div>
-                  {item.description && (
-                    <p
-                      className={`text-[10px] mt-0.5 truncate ${matches ? 'text-white/60' : 'text-gray-500'}`}
-                    >
-                      {item.description}
-                    </p>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      ))}
-    </nav>
-
-    {spec.context && spec.context.length > 0 && (
-      <div className="border-t border-gray-100 px-3 py-3 space-y-2 max-h-[40vh] overflow-y-auto">
-        {spec.context.map((card, i) => (
-          <ContextCardView key={i} card={card} />
-        ))}
-      </div>
-    )}
-  </aside>
-)
-
-const SegBtn: React.FC<{
-  active: boolean
-  onClick: () => void
-  children: ReactNode
-}> = ({ active, onClick, children }) => (
-  <button
-    onClick={onClick}
-    className={`flex-1 px-2 py-1 text-[11px] font-medium rounded transition-colors ${
-      active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-    }`}
-  >
-    {children}
-  </button>
-)
-
-const ContextCardView: React.FC<{ card: ContextCard }> = ({ card }) => (
-  <div className={`rounded border px-2.5 py-2 ${TONE_STYLE[card.tone]}`}>
-    <p className="text-[10px] font-bold uppercase tracking-widest mb-1">{card.title}</p>
-    <ul className="text-[11px] space-y-0.5 list-disc list-inside marker:text-current/40">
-      {card.items.map((it, i) => (
-        <li key={i}>{it}</li>
-      ))}
-    </ul>
+    {value}
   </div>
 )
 
-// ---------------------------------------------------------------------------
-// Welcome / Help Modal (P8 — includes dev mode tip)
-// ---------------------------------------------------------------------------
+const ArrowSeparator: React.FC = () => (
+  <div className="flex items-center justify-center px-6 self-center" data-v3-arrow>
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+      <path d="M8 20H32M32 20L24 12M32 20L24 28" stroke="#9CA3AF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  </div>
+)
 
-const HelpModal: React.FC<{
-  spec: V3ArtboardSpec
-  onClose: () => void
-}> = ({ spec, onClose }) => {
-  const items = spec.brand.welcomeHelp ?? DEFAULT_HELP
+const VLineSeparator: React.FC = () => (
+  <div className="mx-12 self-stretch flex items-center" data-v3-vline>
+    <div className="w-px h-full" style={{ background: 'var(--v3-border, #d7d6da)' }} />
+  </div>
+)
+
+const PlatformPill: React.FC<{ label: string }> = ({ label }) => (
+  <p className="mb-1.5 text-center text-[10px] font-bold uppercase tracking-wider text-blue-500">{label}</p>
+)
+
+const FlowBadge: React.FC<{ label: string; bg?: string }> = ({ label, bg }) => (
+  <div className="flex items-center justify-center rounded-lg text-white text-sm font-bold px-3 py-1" style={{ background: bg ?? 'var(--v3-accent, #402AFF)' }} data-v3-flow-badge>
+    {label}
+  </div>
+)
+
+/* ── F1 — Welcome help modal ──────────────────────────────────────────── */
+
+const WelcomeHelpModal: React.FC<{ items: { kbd: string; text: string }[]; onClose: () => void }> = ({ items, onClose }) => (
+  <div
+    className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 font-perk-sans"
+    onClick={onClose}
+    data-v3-help-modal
+  >
+    <div
+      className="bg-white rounded-2xl max-w-[480px] w-full mx-4 p-8"
+      style={{ boxShadow: '0 24px 60px rgba(0,0,0,0.3)' }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <h2 className="text-xl font-bold mb-1" style={{ color: 'var(--v3-text, #03072d)' }}>Welcome</h2>
+      <p className="text-sm mb-2" style={{ color: 'var(--v3-text-muted, #73727c)' }}>Navigate this prototype like Figma.</p>
+      <p className="text-sm mb-6" style={{ color: 'var(--v3-text, #03072d)' }}>Bird's eye view of every flow and state.</p>
+      <ul className="space-y-3 mb-6">
+        {items.map((it, i) => (
+          <li key={i} className="flex items-center gap-3">
+            <span
+              className="shrink-0 px-2 py-1 rounded-md font-mono text-[12px] whitespace-nowrap"
+              style={{ background: 'var(--v3-bg-muted, #f8f8fb)', border: '1px solid var(--v3-border, #d7d6da)', color: 'var(--v3-text, #03072d)' }}
+            >{it.kbd}</span>
+            <span className="text-sm" style={{ color: 'var(--v3-text, #03072d)' }}>{it.text}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-5 py-2.5 rounded-md text-white text-sm font-bold transition-colors"
+          style={{ background: 'var(--v3-accent, #402aff)' }}
+        >Got it</button>
+      </div>
+    </div>
+  </div>
+)
+
+/* ── Floating viewer nav (with help button F1) ────────────────────────── */
+
+const FloatingViewerNav: React.FC<{
+  label: string
+  platforms: ScreenPlatform[]
+  activePlatform: ScreenPlatform
+  onPlatformChange: (p: ScreenPlatform) => void
+  viewMode: ViewMode
+  onViewModeChange: (m: ViewMode) => void
+  onPrev: () => void
+  onNext: () => void
+  canPrev: boolean
+  canNext: boolean
+  onHelp: () => void
+}> = ({ label, platforms, activePlatform, onPlatformChange, viewMode, onViewModeChange, onPrev, onNext, canPrev, canNext, onHelp }) => {
+  const btn = 'px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors'
+  const btnOn = 'text-grey-50 hover:bg-grey-03 hover:text-brand-black'
+  const btnOff = 'text-grey-20 cursor-not-allowed'
+
+  // Per /v3artboard-may-22: dynamic island defaults to compact pill, expands on hover/focus.
+  const [expanded, setExpanded] = React.useState(false)
+  const collapseTimer = React.useRef<number | null>(null)
+  const onEnter = React.useCallback(() => {
+    if (collapseTimer.current) { window.clearTimeout(collapseTimer.current); collapseTimer.current = null }
+    setExpanded(true)
+  }, [])
+  const onLeave = React.useCallback(() => {
+    if (collapseTimer.current) window.clearTimeout(collapseTimer.current)
+    collapseTimer.current = window.setTimeout(() => setExpanded(false), 350)
+  }, [])
+  React.useEffect(() => () => { if (collapseTimer.current) window.clearTimeout(collapseTimer.current) }, [])
+
   return (
     <div
-      className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center p-8"
-      onClick={onClose}
+      className="fixed top-3 left-1/2 -translate-x-1/2 z-[80] px-2 max-w-[calc(100vw-12px)] font-perk-sans"
+      data-v3-floating-nav
+      data-expanded={expanded || undefined}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
+      onFocus={onEnter}
+      onBlur={onLeave}
     >
-      <div
-        className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold">{spec.brand.title} — help</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-900">
-            ✕
+      {!expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          aria-label={`Show viewer controls — ${label}`}
+          aria-expanded={false}
+          className="rounded-full bg-white inline-flex items-center gap-2 px-3 py-1.5 transition-shadow hover:shadow-md"
+          style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.05)', border: '1px solid var(--v3-border, #d7d6da)' }}
+        >
+          <span className="text-[12px] font-semibold whitespace-nowrap" style={{ color: 'var(--v3-text, #03072d)' }}>{label}</span>
+          <span aria-hidden className="inline-flex items-center gap-0.5 ml-1">
+            <span className="h-1 w-1 rounded-full bg-grey-20" />
+            <span className="h-1 w-1 rounded-full bg-grey-20" />
+            <span className="h-1 w-1 rounded-full bg-grey-20" />
+          </span>
+        </button>
+      )}
+      {expanded && (
+        <div
+          className="rounded-full bg-white inline-flex items-center gap-1.5 px-2 py-1.5"
+          style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.06)', border: '1px solid var(--v3-border, #d7d6da)' }}
+          aria-expanded={true}
+        >
+          <button type="button" onClick={() => window.history.back()} className={`${btn} ${btnOn} flex items-center gap-1`}>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="w-3 h-3">
+              <path d="M10 3L5 8l5 5" />
+            </svg>
+            Back
           </button>
+          <div className="h-5 w-px" style={{ background: 'var(--v3-border, #d7d6da)' }} />
+          <button type="button" onClick={onPrev} disabled={!canPrev} className={`${btn} ${canPrev ? btnOn : btnOff}`}>Prev</button>
+          <p className="px-2 text-[12px] font-semibold whitespace-nowrap" style={{ color: 'var(--v3-text, #03072d)' }}>{label}</p>
+          <button type="button" onClick={onNext} disabled={!canNext} className={`${btn} ${canNext ? btnOn : btnOff}`}>Next</button>
+          <div className="h-5 w-px" style={{ background: 'var(--v3-border, #d7d6da)' }} />
+          <div className="flex items-center p-0.5 rounded-full" style={{ background: 'var(--v3-bg-muted, #f8f8fb)', border: '1px solid var(--v3-border, #d7d6da)' }}>
+            {platforms.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => onPlatformChange(p)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all ${
+                  activePlatform === p && viewMode === 'viewer'
+                    ? 'bg-white text-brand-black shadow-sm'
+                    : 'text-grey-50 hover:text-brand-black'
+                }`}
+              >
+                {PLATFORM_LABELS[p]}
+              </button>
+            ))}
+          </div>
+          <div className="h-5 w-px" style={{ background: 'var(--v3-border, #d7d6da)' }} />
+          <button
+            type="button"
+            onClick={() => onViewModeChange(viewMode === 'viewer' ? 'artboard' : 'viewer')}
+            className={`${btn} font-semibold ${viewMode === 'artboard' ? 'text-white' : 'text-grey-50 hover:bg-grey-03 hover:text-brand-black'}`}
+            style={viewMode === 'artboard' ? { background: 'var(--v3-accent, #402aff)' } : undefined}
+          >
+            {viewMode === 'artboard' ? 'Full screen' : "Bird's eye"}
+          </button>
+          <button type="button" onClick={onHelp} aria-label="How to navigate" data-v3-help-button className={`${btn} ${btnOn} w-7 h-7 p-0 flex items-center justify-center`}>?</button>
         </div>
-        <div className="space-y-3">
-          {items.map((item, i) => (
-            <div key={i} className="flex gap-3 items-start">
-              <div className="w-14 shrink-0 text-center">
-                {item.kbd && (
-                  <span className="inline-block px-2 py-1 bg-gray-100 border border-gray-200 rounded text-xs font-mono">
-                    {item.kbd}
-                  </span>
-                )}
-                {item.badge && (
-                  <span className="inline-block px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold uppercase">
-                    {item.badge}
-                  </span>
-                )}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-900">{item.title}</p>
-                <p className="text-xs text-gray-600">{item.text}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   )
 }
 
-const DEFAULT_HELP = [
-  { kbd: '←/→', title: 'Step through', text: 'Move between states.' },
-  { kbd: 'Cmd+1', title: 'Viewer', text: 'Single frame, scale-to-fit.' },
-  { kbd: 'Cmd+2', title: 'Bird\'s-eye', text: 'Artboard grid of all frames.' },
-  { kbd: 'click', title: 'Frame -> Viewer', text: 'Click any artboard frame to open it.' },
-  { kbd: '</>', badge: 'NEW', title: 'Dev Mode', text: 'Toggle the inspection overlay in the floating nav. Click any element -> source file:line (coming). Hover -> reveal annotations.' },
-]
-
-// ---------------------------------------------------------------------------
-// Viewer surface
-// ---------------------------------------------------------------------------
-
-interface ViewerProps {
-  mode: ScreenMode
-  state: ScreenState
-  platform: Platform
-  zoom: number
-  bleed?: boolean
+/* ── Frame codes (A1, A2, B1 …) ───────────────────────────────────────────
+ * Every artboard frame gets a short alphanumeric handle so a frame can be named
+ * in one token ("fix B3") instead of "the manager hub frame in the see-more
+ * section". Letter = section, number = frame within that section in reading
+ * order across its steps.
+ *
+ * Both indices are taken from the UNFILTERED spec — hidden-by-default sections
+ * and hidden steps still consume their code. Revealing a section therefore never
+ * renumbers the frames around it, which is the whole point: a code written down
+ * in a comment or a message has to still mean the same frame tomorrow. */
+const sectionLetter = (i: number): string => {
+  let n = i, out = ''
+  do { out = String.fromCharCode(65 + (n % 26)) + out; n = Math.floor(n / 26) - 1 } while (n >= 0)
+  return out
 }
 
-const Viewer: React.FC<ViewerProps> = ({ mode, state, platform, zoom, bleed }) => {
-  const fullScreen =
-    typeof mode.fullScreenViewer === 'function'
-      ? mode.fullScreenViewer(state, platform)
-      : Boolean(mode.fullScreenViewer)
+const FrameCode: React.FC<{ code: string }> = ({ code }) => (
+  <span
+    data-v3-frame-code
+    /* Geometry (padding/radius/size) stays in classes, never inline: an inline
+       style beats any stylesheet, which would stop the zoom lab's counter-scale
+       rules from holding the chip at screen size. Colour is inline — it has no
+       reason to scale. */
+    className="inline-flex items-center rounded-[3px] px-[5px] py-[3px] font-mono text-[10px] font-bold leading-none tracking-wider"
+    style={{
+      background: 'var(--v3-code-bg, #dcdce4)',
+      color: 'var(--v3-code-text, #43424c)',
+    }}
+  >
+    {code}
+  </span>
+)
 
-  const frame = mode.renderFrame(state, platform)
+/* ── Artboard frame (clickable static frame) — F12, F13 ───────────────── */
 
-  if (fullScreen) {
-    return (
-      // cbt 2026-09-02: h-[100dvh] so a component that fills its parent (h-full) fills the viewer,
-      // matching how it fills the PhoneFrame on the board. min-h-screen alone leaves height auto.
-      <main className="h-[100dvh] min-h-screen ml-0 md:ml-[260px]">
-        {frame}
-      </main>
-    )
+const ArtboardClickFrame: React.FC<{
+  modes: readonly ScreenMode[]
+  ref_: ArtboardFrameRef
+  zoom: number
+  showStateLabel: boolean
+  code?: string
+  fitHeight?: boolean
+  revealed?: Record<string, boolean>
+  onClick: () => void
+}> = ({ modes, ref_, zoom, showStateLabel, code, fitHeight, revealed, onClick }) => {
+  const mode = modes.find((m) => m.id === ref_.modeId)
+  const state = mode?.states.find((s) => s.id === ref_.stateId)
+  if (!mode || !state) {
+    return <div className="text-red-500 text-xs p-4 border border-red-200 rounded">Missing {ref_.modeId}/{ref_.stateId}</div>
   }
-
-  // Mobile full-bleed: drop the device bezel + centering, fill the screen.
-  if (bleed) {
-    return (
-      <FrameBleedContext.Provider value={true}>
-        <main className="bg-white ml-0 overflow-hidden">{frame}</main>
-      </FrameBleedContext.Provider>
-    )
-  }
-
-  // Viewer always renders 1:1; the sidebar zoom slider only affects bird's-eye.
-  // `zoom` is intentionally ignored here.
-  void zoom
+  const platLabel = ref_.label ?? PLATFORM_LABELS[ref_.platform]
+  // Grow flag threaded into the mode's artboard frame. DEFAULT: mobile/native
+  // frames grow to their full content height (the whole phone screen is shown,
+  // no internal scroll) — a frame opts OUT with `fitHeight: false`. Web stays
+  // opt-IN to grow (spec default frameHeight:'auto' or per-frame fitHeight).
+  // Modes that ignore this arg are unaffected (they self-size via rawArtboardFrame).
+  const grow = ref_.fitHeight ?? (ref_.platform !== 'web' ? true : !!fitHeight)
+  const raw = mode.renderArtboardFrame(state, ref_.platform, { grow }, { revealed })
+  const rendered = ref_.rawFrame ? raw : autoWrapFrame(raw, ref_.platform)
+  // F13: state label + platform pill live OUTSIDE the (zoom) wrapper.
+  // Native widths come from frames.tsx (1440 web, 358 mobile/native).
+  const w = PLATFORM_WIDTH[ref_.platform]
+  const h = PLATFORM_HEIGHT[ref_.platform]
   return (
-    <main
-      className="min-h-screen flex items-start justify-center p-4 pt-16 md:p-8 bg-[#f0f0f0] ml-0 md:ml-[260px]"
+    <div
+      id={`frame-${mode.id}-${state.id}`}
+      data-v3-frame
+      data-v3-code={code}
+      className="cursor-pointer rounded-xl transition-all hover:shadow-[0_0_0_3px_rgba(64,42,255,0.35)] flex flex-col"
+      style={{ width: w * zoom }}
+      onClick={onClick}
     >
-      <div className="shrink-0">{frame}</div>
-    </main>
+      {/* The code renders even when the state label is suppressed — a frame with
+          no visible name is exactly the one that most needs a handle. */}
+      {(code || (showStateLabel && !ref_.hideStateLabel)) && (
+        /* data-v3-frame-label: the counter-scale CSS in the zoom lab targets this
+           row, since the label is no longer a direct <p> child of the frame. */
+        <div data-v3-frame-label className="flex items-center gap-1.5 mb-1">
+          {code && <FrameCode code={code} />}
+          {showStateLabel && !ref_.hideStateLabel && (
+            <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--v3-text, #03072d)' }}>
+              {state.label}
+            </p>
+          )}
+        </div>
+      )}
+      {platLabel && <PlatformPill label={platLabel} />}
+      {/* Height: mobile/native device frames self-size (PhoneFrame/NativeFrame own
+          their height — fixed 780 or grown full-length), so never cap them here.
+          Web: drop the fixed viewport height only when fitHeight (spec default or
+          per-frame ref_.fitHeight opt-in) so the page grows + rows below reflow. */}
+      <div className="pointer-events-none" style={{ zoom, width: w, height: ref_.platform !== 'web' ? undefined : ((fitHeight || ref_.fitHeight) ? undefined : h) }}>{rendered}</div>
+    </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Artboard surface
-// ---------------------------------------------------------------------------
-
-interface ArtboardProps {
-  modes: ScreenMode[]
-  artboard: ArtboardSection[]
+const ArtboardStepBlock: React.FC<{
+  step: ArtboardStep
+  modes: readonly ScreenMode[]
   zoom: number
-  onFrameClick: (frame: ArtboardFrameRef) => void
-}
-
-const Artboard: React.FC<ArtboardProps> = ({ modes, artboard, zoom, onFrameClick }) => (
-  <main
-    className="min-h-screen bg-[#f0f0f0] p-4 pt-20 md:p-10 ml-0 md:ml-[260px]"
-  >
-    <div className="space-y-16">
-      {artboard.map((section, sIdx) => (
-        <ArtboardSectionView
-          key={section.id}
-          section={section}
+  showStateLabels: boolean
+  /** Section letter; absent = codes off for this board. */
+  codePrefix?: string
+  /** How many frames precede this step inside its section. */
+  codeStart?: number
+  fitHeight?: boolean
+  revealed?: Record<string, boolean>
+  onFrameClick: (modeId: string, stateId: string, platform: ScreenPlatform) => void
+}> = ({ step, modes, zoom, showStateLabels, codePrefix, codeStart = 0, fitHeight, revealed, onFrameClick }) => {
+  // The step title is a text link to this step's page — clicking opens the
+  // live viewer for its primary (first) frame. Mirrors the click-to-open frame
+  // affordance but makes it discoverable as text in the artboard space.
+  const primaryFrame = step.frames[0]
+  const openPage = primaryFrame
+    ? () => onFrameClick(primaryFrame.modeId, primaryFrame.stateId, primaryFrame.platform)
+    : undefined
+  return (
+  <div className="shrink-0" style={step.maxWidth ? { maxWidth: step.maxWidth } : undefined}>
+    {(step.badge !== undefined || step.title) && (
+      <div className="flex items-center gap-2 mb-1">
+        {step.badge !== undefined && <StepBadge value={step.badge} color={step.badgeColor} />}
+        {step.title && (
+          openPage ? (
+            <button
+              type="button"
+              onClick={openPage}
+              className="group inline-flex items-center gap-1 transition-colors hover:text-[var(--v3-accent,#402aff)]"
+              style={{ fontSize: 18, fontWeight: 700, color: 'var(--v3-text, #03072d)' }}
+            >
+              <span className="group-hover:underline underline-offset-2">{step.title}</span>
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 opacity-0 -translate-x-0.5 transition-all group-hover:opacity-100 group-hover:translate-x-0">
+                <path d="M5 11L11 5M11 5H6M11 5V10" />
+              </svg>
+            </button>
+          ) : (
+            <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--v3-text, #03072d)' }}>{step.title}</span>
+          )
+        )}
+      </div>
+    )}
+    {step.description && <p className="text-[11px] mb-3 ml-8" style={{ color: 'var(--v3-text-muted, #73727c)' }}>{step.description}</p>}
+    {step.pill && (
+      <div className="ml-8 mb-3">
+        <span style={{ background: step.pill.bg ?? '#EEF0FF', color: step.pill.color ?? 'var(--v3-accent, #402AFF)', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 8px' }}>
+          {step.pill.label}
+        </span>
+      </div>
+    )}
+    <div className="flex items-start gap-6">
+      {step.frames.map((f, fi) => (
+        <ArtboardClickFrame
+          key={`${f.modeId}-${f.stateId}-${f.platform}`}
           modes={modes}
+          ref_={f}
           zoom={zoom}
-          onFrameClick={onFrameClick}
-          showDivider={sIdx > 0}
+          showStateLabel={showStateLabels}
+          code={codePrefix ? `${codePrefix}${codeStart + fi + 1}` : undefined}
+          fitHeight={fitHeight}
+          revealed={revealed}
+          onClick={() => onFrameClick(f.modeId, f.stateId, f.platform)}
         />
       ))}
     </div>
-  </main>
-)
+  </div>
+  )
+}
 
-const ArtboardSectionView: React.FC<{
+/* ── F3, F16, F19 — artboard section ──────────────────────────────────── */
+
+const ArtboardSectionBlock: React.FC<{
   section: ArtboardSection
-  modes: ScreenMode[]
+  modes: readonly ScreenMode[]
   zoom: number
-  onFrameClick: (f: ArtboardFrameRef) => void
-  showDivider: boolean
-}> = ({ section, modes, zoom, onFrameClick, showDivider }) => (
-  <Fragment>
-    {showDivider && section.divider !== 'none' && (
-      <hr
-        className={`border-0 border-t-2 ${
-          section.divider === 'dashed'
-            ? 'border-dashed border-gray-300'
-            : 'border-gray-400'
-        }`}
-      />
-    )}
-    <section>
-      <header className="mb-4 flex items-center gap-3">
-        {section.flowBadge && (
-          <span
-            className="text-[10px] font-bold uppercase tracking-widest text-white px-2 py-0.5 rounded"
-            style={{ backgroundColor: section.flowBadge.bg ?? '#111827' }}
-          >
-            {section.flowBadge.label}
-          </span>
-        )}
-        {section.title && (
-          <h2 className="text-xl font-bold text-gray-900">{section.title}</h2>
-        )}
-      </header>
-      {section.description && (
-        <p className="text-sm text-gray-600 max-w-3xl mb-6">{section.description}</p>
+  autoNumber: boolean
+  showStateLabels: boolean
+  /** Section letter for frame codes; absent = codes off. */
+  codePrefix?: string
+  fitHeight?: boolean
+  revealed?: Record<string, boolean>
+  onFrameClick: (modeId: string, stateId: string, platform: ScreenPlatform) => void
+}> = ({ section, modes, zoom, autoNumber, showStateLabels, codePrefix, fitHeight, revealed, onFrameClick }) => {
+  const dividerCls =
+    section.divider === 'thick'  ? 'mt-12 pt-8 border-t-2 border-grey-20' :
+    section.divider === 'dashed' ? 'mt-10 pt-8 border-t border-dashed border-grey-20' :
+    section.divider === 'space'  ? 'mt-12 pt-8' : ''
+
+  const computedTitle = autoNumber ? autoSectionTitle(modes, section.id, section.title) : section.title
+  const computedMeta = autoNumber ? autoSectionMeta(modes, section.id) : undefined
+
+  const mode = modes.find((m) => m.id === section.id)
+  const subtitle = section.subtitle ?? mode?.description
+
+  return (
+    <div className={dividerCls} data-v3-section>
+      {(section.flowBadge || computedTitle) && (
+        <div className="flex items-center gap-3 mb-2">
+          {section.flowBadge && <FlowBadge label={section.flowBadge.label} bg={section.flowBadge.bg} />}
+          {computedTitle && <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--v3-text, #03072d)' }}>{computedTitle}</span>}
+          {computedMeta && <span className="text-xs" style={{ color: 'var(--v3-text-muted, #73727c)' }}>{computedMeta}</span>}
+        </div>
       )}
-
-      <div className="flex items-start gap-8 flex-wrap">
-        {section.steps.map((step, i) => (
-          <Fragment key={i}>
-            <div>
-              {(step.badge !== undefined || step.title) && (
-                <div className="mb-3 flex items-center gap-2">
-                  {step.badge !== undefined && (
-                    <span
-                      className="w-6 h-6 rounded-full text-white text-[11px] font-bold flex items-center justify-center"
-                      style={{ backgroundColor: step.badgeColor ?? '#111827' }}
-                    >
-                      {step.badge}
-                    </span>
-                  )}
-                  {step.title && (
-                    <h3 className="text-sm font-semibold text-gray-900">
-                      {step.title}
-                    </h3>
-                  )}
-                  {step.pill && (
-                    <span
-                      className="text-[10px] font-bold px-2 py-0.5 rounded"
-                      style={{
-                        backgroundColor: step.pill.bg ?? '#e5e7eb',
-                        color: step.pill.color ?? '#374151',
-                      }}
-                    >
-                      {step.pill.label}
-                    </span>
-                  )}
-                </div>
-              )}
-              {step.description && (
-                <p className="text-xs text-gray-600 max-w-xs mb-3">
-                  {step.description}
-                </p>
-              )}
-              <div className="flex gap-4 items-start">
-                {step.frames.map((ref, fi) => (
-                  <ArtboardFrameView
-                    key={fi}
-                    frame={ref}
-                    modes={modes}
-                    zoom={zoom}
-                    onClick={() => onFrameClick(ref)}
-                  />
-                ))}
-              </div>
-            </div>
-            {step.arrowAfter && i < section.steps.length - 1 && (
-              <div className="self-center pt-10">
-                {step.arrowAfter === 'vline' ? (
-                  <div className="w-px h-32 bg-gray-300" />
-                ) : (
-                  <div className="text-3xl text-gray-300 leading-none">→</div>
-                )}
-              </div>
-            )}
-          </Fragment>
-        ))}
+      {subtitle && <p className="text-xs mb-4" style={{ color: 'var(--v3-text-muted, #73727c)' }}>{subtitle}</p>}
+      {section.description && <p className="text-[12px] mb-6 max-w-[640px]" style={{ color: 'var(--v3-text-muted, #73727c)' }}>{section.description}</p>}
+      {section.preLabel && <p className="text-[11px] font-bold uppercase tracking-widest mb-4" style={{ color: 'var(--v3-text-muted, #73727c)' }}>{section.preLabel}</p>}
+      <div className="flex items-start">
+        {/* Code offsets are accumulated over ALL steps, including hidden ones, so
+            unhiding a step never renumbers the frames after it. */}
+        {(() => {
+          let seen = 0
+          const offsets = section.steps.map((step) => {
+            const start = seen
+            seen += step.frames.length
+            return start
+          })
+          return section.steps.map((step, idx) => ({ step, codeStart: offsets[idx] }))
+        })().filter(({ step }) => !step.hidden).map(({ step, codeStart }, i, steps) => {
+          const isLast = i === steps.length - 1
+          const sep = step.arrowAfter
+          const renderSep = sep === 'vline'
+            ? <VLineSeparator />
+            : sep === false
+              ? null
+              : sep === true
+                ? <ArrowSeparator />
+                : isLast ? null : <ArrowSeparator />
+          return (
+            <React.Fragment key={i}>
+              <ArtboardStepBlock step={step} modes={modes} zoom={zoom} showStateLabels={showStateLabels} codePrefix={codePrefix} codeStart={codeStart} fitHeight={fitHeight} revealed={revealed} onFrameClick={onFrameClick} />
+              {renderSep}
+            </React.Fragment>
+          )
+        })}
       </div>
-    </section>
-  </Fragment>
-)
+    </div>
+  )
+}
 
-const ArtboardFrameView: React.FC<{
-  frame: ArtboardFrameRef
-  modes: ScreenMode[]
-  zoom: number
-  onClick: () => void
-}> = ({ frame, modes, zoom, onClick }) => {
-  const mode = findMode(modes, frame.modeId)
-  const state = findState(mode, frame.stateId)
-  if (!mode || !state) {
+/* ── Frame tray (overlay drawer, slides up over the artboard) ─────────── */
+
+/* ── E7: Imperative ref API ───────────────────────────────────────────── */
+
+export interface V3ArtboardHandle {
+  selectByIds: (modeId: string, stateId: string, platform: ScreenPlatform) => boolean
+  setViewMode: (mode: ViewMode) => void
+  setZoom: (z: number) => void
+  getCurrent: () => { modeId: string; stateId: string; platform: ScreenPlatform; viewMode: ViewMode; zoom: number }
+}
+
+/* ── Top-level V3Artboard ─────────────────────────────────────────────── */
+
+export interface V3ArtboardProps {
+  spec: V3ArtboardSpec
+  theme?: V3ArtboardTheme
+  /** F5 — optional app shell wrapper applied to viewer rendering. */
+  appShell?: React.ComponentType<{ children: React.ReactNode }>
+  /** F6 — sharedProps passed through to mode.renderFrame as 3rd arg. */
+  sharedProps?: unknown
+  /** Who owns the artboard transform. 'external' hands it to a parent zoom shell. */
+  zoomControl?: 'internal' | 'external'
+}
+
+export const V3Artboard = React.forwardRef<V3ArtboardHandle, V3ArtboardProps>(({ spec, theme, appShell: AppShell, sharedProps, zoomControl = 'internal' }, ref) => {
+  const externalZoom = zoomControl === 'external'
+  const { modes } = spec
+  const defaults = spec.defaults ?? {}
+  const storageKey = `v3artboard:${spec.brand.title}`
+  const helpSeenKey = `v3artboard:helpSeen:${spec.brand.title}`
+  const componentFocusLayout: 'grid' | 'detail' = spec.componentFocusLayout ?? 'grid'
+
+  const resolvedComponents = useMemo<ComponentFocusConfigResolved[]>(
+    () => (spec.componentFocus ?? []).map(resolveComponentFocus),
+    [spec.componentFocus],
+  )
+  const hasComponents = resolvedComponents.length > 0
+
+  const effectiveSidebar = useMemo<SidebarSection[]>(
+    () => (isAutoSidebar(spec) ? deriveSidebarFromModes(modes) : (spec.sidebar ?? [])),
+    [spec, modes],
+  )
+  const autoNumber = isAutoSidebar(spec)
+
+  const validatedRef = useRef(false)
+  const [validationIssues, setValidationIssues] = useState<string[]>([])
+  if (!validatedRef.current) {
+    validatedRef.current = true
+    const issues = validateSpec(spec)
+    if (issues.length > 0) {
+      console.warn(`[V3Artboard] spec validation: ${issues.length} issue(s)`)
+      issues.forEach((i) => console.warn(`[V3Artboard] spec validation: ${i}`))
+    }
+    const isDev = (typeof import.meta !== 'undefined') && (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV
+    if (isDev) {
+      setTimeout(() => setValidationIssues(issues), 0)
+    }
+    // Tour Composer auto-discovery: publish an enumerable summary of this
+    // artboard's modes/states/platforms so a same-origin iframe can read it.
+    ;(window as Window & { __V3_DISCOVERY?: unknown }).__V3_DISCOVERY = {
+      title: spec.brand.title,
+      modes: modes.map((m) => ({
+        id: m.id,
+        label: m.label,
+        platforms: m.platforms,
+        states: m.states.map((s) => ({ id: s.id, label: s.label })),
+      })),
+    }
+  }
+
+  if (modes.length === 0) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 text-xs text-red-700 rounded">
-        Missing modeId={frame.modeId} or stateId={frame.stateId}
+      <div className="flex min-h-screen items-center justify-center font-perk-sans" style={{ background: 'var(--v3-bg-muted, #f8f8fb)', ...buildThemeStyle(theme) }}>
+        <div className="text-center">
+          <p className="text-base font-bold" style={{ color: 'var(--v3-text, #03072d)' }}>No modes configured.</p>
+          <p className="text-xs mt-1" style={{ color: 'var(--v3-text-muted, #73727c)' }}>Add to spec.modes[]</p>
+        </div>
       </div>
     )
   }
-  const renderer = mode.renderArtboardFrame ?? mode.renderFrame
-  const node = renderer(state, frame.platform)
-  const wrapped = wrapForArtboard(node, frame.platform, frame.rawFrame)
 
-  // E3: outer wrapper is <div role="button">, not <button>. Frame content may
-  // include its own buttons (composer send, sidebar toggles); button-in-button
-  // is invalid DOM nesting and React warns at mount.
-  return (
-    <div>
-      {frame.label && (
-        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">
-          {frame.label}
-        </p>
-      )}
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={onClick}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            onClick()
-          }
-        }}
-        data-route-key={`${frame.modeId}/${frame.stateId}/${frame.platform}`}
-        className="block cursor-pointer hover:ring-2 hover:ring-gray-900/50 rounded transition-all text-left"
-        style={{ zoom }}
-      >
-        <div className="pointer-events-none">{wrapped}</div>
+  const firstModePlatforms = modes[0].platforms
+  let initialPlatform: ScreenPlatform = defaults.platform ?? firstModePlatforms[0] ?? 'web'
+  if (defaults.platform && !firstModePlatforms.includes(defaults.platform)) {
+    const fallback = firstModePlatforms[0] ?? 'web'
+    console.warn(`[V3Artboard] defaults.platform "${defaults.platform}" not in modes[0].platforms; clamping to "${fallback}"`)
+    initialPlatform = fallback
+  }
+
+  const persisted = loadPersisted(storageKey)
+  const hash = parseHash()
+
+  const findByIds = (modeId?: string, stateId?: string): { mi: number; si: number } | null => {
+    if (!modeId || !stateId) return null
+    const mi = modes.findIndex((m) => m.id === modeId)
+    if (mi < 0) return null
+    const si = modes[mi].states.findIndex((s) => s.id === stateId)
+    if (si < 0) return null
+    return { mi, si }
+  }
+
+  const persistedIds = persisted
+    ? findByIds(modes[persisted.activeModeIndex ?? -1]?.id, modes[persisted.activeModeIndex ?? -1]?.states[persisted.activeStateIndex ?? -1]?.id)
+    : null
+  const hashIds = findByIds(hash.m, hash.s)
+
+  const initialMI = hashIds?.mi ?? persistedIds?.mi ?? 0
+  const initialSI = hashIds?.si ?? persistedIds?.si ?? 0
+  const initialPlat: ScreenPlatform =
+    (hash.p && modes[initialMI]?.platforms.includes(hash.p) ? hash.p : null) ??
+    (persisted?.activePlatform && modes[initialMI]?.platforms.includes(persisted.activePlatform) ? persisted.activePlatform : null) ??
+    initialPlatform
+
+  // `&panel=0` in the URL forces the sidebar closed on load (for shared proto
+  // links); otherwise fall back to persisted state, then open.
+  const [panelOpen, setPanelOpen] = useState<boolean>(hash.panel === '0' ? false : (persisted?.panelOpen ?? true))
+  // Priority: URL hash.v > spec.defaults.viewMode > localStorage persisted > 'artboard'.
+  // Spec defaults outrank stale localStorage so a shared URL renders the author-intended view.
+  const initialTab: SidebarTab =
+    (hash.v as SidebarTab | undefined) ??
+    (defaults.viewMode as SidebarTab | undefined) ??
+    (persisted?.viewMode as SidebarTab | undefined) ??
+    'artboard'
+  const [tab, setTab] = useState<SidebarTab>(initialTab)
+  const [activeModeIndex, setActiveModeIndex] = useState(initialMI)
+  const [activeStateIndex, setActiveStateIndex] = useState(initialSI)
+  const [activePlatform, setActivePlatform] = useState<ScreenPlatform>(initialPlat)
+  const [zoom, setZoom] = useState(persisted?.zoom ?? defaults.zoom ?? 0.3)
+  const [itemPlatform, setItemPlatform] = useState<Record<string, ScreenPlatform>>(persisted?.itemPlatform ?? {})
+  const [activeComponentId, setActiveComponentId] = useState<string | null>(hasComponents ? resolvedComponents[0].id : null)
+  const [activeComponentStateIndex, setActiveComponentStateIndex] = useState(0)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const devMode = useDevMode((s) => s.devMode)
+  const setDevMode = useDevMode((s) => s.setDevMode)
+  const [helpSeenInitialized, setHelpSeenInitialized] = useState(false)
+  // One map for both switch kinds: hidden-flows sections and spec-level option
+  // toggles. Option ids never appear in `hiddenSections`, so they hide nothing —
+  // they only surface in FrameCtx.revealed for a mode to read.
+  const [revealedSectionIds, setRevealedSectionIds] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries([
+      ...spec.artboard.filter((s) => s.hiddenByDefault && s.defaultRevealed).map((s) => [s.id, true] as const),
+      ...(spec.options ?? []).filter((o) => o.default).map((o) => [o.id, true] as const),
+    ]),
+  )
+  const hiddenSections = useMemo(() => spec.artboard.filter((s) => s.hiddenByDefault), [spec.artboard])
+  const artboardRef = useRef<HTMLDivElement>(null)
+  /* Tracks the previous tab so returning to the artboard can scroll back to the
+   * frame that was on screen, instead of dumping you at the top. */
+  const prevTabRef = useRef(tab)
+  const panelWidth = panelOpen ? 288 : 0
+
+  const viewMode: ViewMode = tab === 'components' ? 'viewer' : tab
+
+  useEffect(() => {
+    if (helpSeenInitialized) return
+    setHelpSeenInitialized(true)
+    try {
+      const seen = window.localStorage.getItem(helpSeenKey)
+      if (!seen) setHelpOpen(true)
+    } catch {}
+  }, [helpSeenInitialized, helpSeenKey])
+
+  const closeHelp = () => {
+    try { window.localStorage.setItem(helpSeenKey, '1') } catch {}
+    setHelpOpen(false)
+  }
+
+  useEffect(() => {
+    savePersisted(storageKey, {
+      viewMode: tab === 'components' ? undefined : tab,
+      activeModeIndex,
+      activeStateIndex,
+      activePlatform,
+      zoom,
+      panelOpen,
+      itemPlatform,
+    })
+  }, [storageKey, tab, activeModeIndex, activeStateIndex, activePlatform, zoom, panelOpen, itemPlatform])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mode = modes[activeModeIndex]
+    const state = mode?.states[activeStateIndex]
+    if (!mode || !state) return
+    const hashViewMode = tab === 'components' ? undefined : (tab as 'viewer' | 'artboard')
+    const next = serializeHash(mode.id, state.id, activePlatform, hashViewMode)
+    if (window.location.hash !== next) {
+      try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${next}`) } catch {}
+    }
+  }, [activeModeIndex, activeStateIndex, activePlatform, modes, tab])
+
+  // Listen for external hash changes (e.g. navigateLab() click handlers inside lab pages)
+  // and project them onto component state. Guard each setter against no-op writes so the
+  // sibling effect above doesn't trigger a write -> read -> write loop.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sync = () => {
+      const h = parseHash()
+      const ids = h.m && h.s ? findByIds(h.m, h.s) : null
+      if (ids) {
+        setActiveModeIndex((prev) => (prev === ids.mi ? prev : ids.mi))
+        setActiveStateIndex((prev) => (prev === ids.si ? prev : ids.si))
+        const targetPlatforms = modes[ids.mi]?.platforms
+        if (h.p && targetPlatforms?.includes(h.p)) {
+          setActivePlatform((prev) => (prev === h.p ? prev : h.p!))
+        }
+      }
+      if (h.v === 'viewer' || h.v === 'artboard') {
+        setTab((prev) => (prev === h.v ? prev : (h.v as SidebarTab)))
+      }
+    }
+    window.addEventListener('hashchange', sync)
+    return () => window.removeEventListener('hashchange', sync)
+  }, [modes])
+
+  /* Coming back from full screen: scroll the artboard to the frame you were just
+   * looking at. Anchored on the frame's id (not a saved pixel offset) so it still
+   * lands correctly after a zoom change or a section being revealed. */
+  useEffect(() => {
+    const was = prevTabRef.current
+    prevTabRef.current = tab
+    if (tab !== 'artboard' || was === 'artboard') return
+    const mode = modes[activeModeIndex]
+    const state = mode?.states[activeStateIndex]
+    if (!mode || !state) return
+    let raf = 0
+    // Two frames: the artboard has just mounted, so wait for it to lay out.
+    raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => {
+        const c = artboardRef.current
+        const el = document.getElementById(`frame-${mode.id}-${state.id}`)
+        if (!c || !el) return
+        const r = el.getBoundingClientRect()
+        const cr = c.getBoundingClientRect()
+        c.scrollTop += r.top - cr.top - 80
+        c.scrollLeft += r.left - cr.left - 40
+      })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [tab, modes, activeModeIndex, activeStateIndex])
+
+  /* F7 — cursor-anchored Cmd/Ctrl + scroll zoom. Off when a shell owns the transform. */
+  useEffect(() => {
+    if (tab !== 'artboard' || externalZoom) return
+    const el = artboardRef.current
+    if (!el) return
+    const handler = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return
+      e.preventDefault()
+      const c = el
+      const rect = c.getBoundingClientRect()
+      setZoom((prev) => {
+        const next = Math.max(0.1, Math.min(1, prev - e.deltaY * 0.002))
+        const cx = (e.clientX - rect.left + c.scrollLeft) / prev
+        const cy = (e.clientY - rect.top + c.scrollTop) / prev
+        requestAnimationFrame(() => {
+          c.scrollLeft = cx * next - (e.clientX - rect.left)
+          c.scrollTop = cy * next - (e.clientY - rect.top)
+        })
+        return next
+      })
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [tab, externalZoom])
+
+  const activeMode: ScreenMode | null = modes[activeModeIndex] ?? null
+  const activeModeHasStates = !!activeMode && activeMode.states.length > 0
+  const activeModeHasPlatforms = !!activeMode && activeMode.platforms.length > 0
+  const clampedStateIndex = activeModeHasStates ? Math.min(activeStateIndex, activeMode!.states.length - 1) : 0
+  const activeState = activeModeHasStates ? activeMode!.states[clampedStateIndex] : null
+
+  const allStatesFlat = useMemo(
+    () => modes.flatMap((m, mi) => m.states.map((_s, si) => ({ mi, si }))),
+    [modes]
+  )
+  const currentFlat = allStatesFlat.findIndex((f) => f.mi === activeModeIndex && f.si === clampedStateIndex)
+
+  const goToFlat = (idx: number) => {
+    const e = allStatesFlat[idx]
+    if (!e) return
+    setActiveModeIndex(e.mi)
+    setActiveStateIndex(e.si)
+  }
+
+  const selectByIdsInternal = (modeId: string, stateId: string, platform: ScreenPlatform): boolean => {
+    const mi = modes.findIndex((m) => m.id === modeId)
+    if (mi < 0) return false
+    const mode = modes[mi]
+    const si = mode.states.findIndex((s) => s.id === stateId)
+    if (si < 0) return false
+    if (!mode.platforms.includes(platform)) return false
+    setActiveModeIndex(mi)
+    setActiveStateIndex(si)
+    setActivePlatform(platform)
+    if (tab === 'artboard' && typeof document !== 'undefined') {
+      requestAnimationFrame(() => {
+        document.getElementById(`frame-${modeId}-${stateId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+      })
+    }
+    return true
+  }
+
+  const handleArtboardFrameClick = (modeId: string, stateId: string, platform: ScreenPlatform) => {
+    const mi = modes.findIndex((m) => m.id === modeId)
+    const mode = modes[mi]
+    const si = mode?.states.findIndex((s) => s.id === stateId) ?? -1
+    if (mi < 0 || si < 0) return
+    if (!mode.platforms.includes(platform)) return
+    // Open the clicked frame full screen. Selecting it (rather than showing an
+    // overlay) is what lets Exit full screen come back to this exact frame.
+    setActiveModeIndex(mi)
+    setActiveStateIndex(si)
+    setActivePlatform(platform)
+    setTab('viewer')
+  }
+
+  useEffect(() => {
+    const isEditable = (el: EventTarget | null): boolean => {
+      if (!(el instanceof HTMLElement)) return false
+      const tag = el.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+      if (el.isContentEditable) return true
+      return false
+    }
+    const handler = (e: KeyboardEvent) => {
+      if (isEditable(e.target)) return
+      if ((e.metaKey || e.ctrlKey) && (e.key === '1' || e.key === '2')) {
+        e.preventDefault()
+        setTab(e.key === '1' ? 'viewer' : 'artboard')
+        return
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        if (currentFlat > 0) goToFlat(currentFlat - 1)
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        if (currentFlat < allStatesFlat.length - 1) goToFlat(currentFlat + 1)
+      } else if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault()
+        setHelpOpen(true)
+      } else if (e.key === 'Escape' && helpOpen) {
+        setHelpOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [currentFlat, allStatesFlat.length, helpOpen])
+
+  useImperativeHandle(ref, () => ({
+    selectByIds: (modeId, stateId, platform) => selectByIdsInternal(modeId, stateId, platform),
+    setViewMode: (m) => setTab(m),
+    setZoom: (z) => setZoom(Math.min(1, Math.max(0.1, z))),
+    getCurrent: () => ({
+      modeId: activeMode?.id ?? '',
+      stateId: activeState?.id ?? '',
+      platform: activePlatform,
+      viewMode,
+      zoom,
+    }),
+  }))
+
+  const fullScreen = !!(activeMode && activeState && (
+    typeof activeMode.fullScreenViewer === 'function'
+      ? activeMode.fullScreenViewer(activeState)
+      : activeMode.fullScreenViewer
+  ))
+
+  const renderViewer = () => {
+    if (!activeMode || !activeState || !activeModeHasPlatforms) {
+      console.warn(`[V3Artboard] viewer skipped: mode "${activeMode?.id ?? '?'}" has no states or platforms`)
+      return (
+        <div className="flex items-center justify-center min-h-[calc(100vh-49px)]" style={{ background: 'var(--v3-bg-muted, #e8e8ec)' }}>
+          <p className="text-xs" style={{ color: 'var(--v3-text-muted, #73727c)' }}>Mode has no renderable state.</p>
+        </div>
+      )
+    }
+    const inner = activeMode.renderFrame(activeState, activePlatform, sharedProps, { revealed: revealedSectionIds })
+    const wrapped = AppShell ? <AppShell>{inner}</AppShell> : inner
+    // Scale the web frame to fit the available width. Divide by the REAL frame
+    // width (PLATFORM_WIDTH.web = 1440), not a hardcoded 1280 — otherwise the
+    // scaled content ends up wider than the space and gets clipped by the
+    // centering container. Mobile/native render 1:1.
+    const contentW = PLATFORM_WIDTH[activePlatform] ?? 1440
+    const availableW = (typeof window !== 'undefined' ? window.innerWidth : 1440) - panelWidth - 64
+    const scale = activePlatform === 'web' ? Math.min(1, availableW / contentW) : 1
+    return (
+      <div className="flex items-start justify-center p-8 pt-16 min-h-[calc(100vh-49px)] overflow-auto" style={{ background: 'var(--v3-bg-muted, #e8e8ec)' }}>
+        <div style={{ zoom: scale, flexShrink: 0 }}>{wrapped}</div>
+      </div>
+    )
+  }
+
+  // External zoom: the shell owns scroll + transform, so drop the viewport clamp.
+  const renderArtboard = () => (
+    <div ref={artboardRef} className={externalZoom ? undefined : 'overflow-auto'} style={{ height: externalZoom ? undefined : 'calc(100vh - 49px)', background: 'var(--v3-bg-muted, #e8e8ec)' }}>
+      <div className="origin-top-left px-8 py-6 pt-16">
+        {/* Letter comes from the position in the FULL spec, so revealing a
+            hidden section never re-letters the ones after it. */}
+        {spec.artboard
+          .map((section, i) => ({ section, letter: sectionLetter(i) }))
+          .filter(({ section }) => !section.hiddenByDefault || revealedSectionIds[section.id])
+          .map(({ section, letter }) => (
+          <ArtboardSectionBlock
+            key={section.id}
+            section={section}
+            modes={modes}
+            zoom={externalZoom ? 1 : zoom}
+            autoNumber={autoNumber}
+            showStateLabels
+            codePrefix={letter}
+            fitHeight={(defaults.frameHeight ?? 'auto') === 'auto'}
+            revealed={revealedSectionIds}
+            onFrameClick={handleArtboardFrameClick}
+          />
+        ))}
       </div>
     </div>
   )
-}
 
-// ---------------------------------------------------------------------------
-// V3Artboard top-level
-// ---------------------------------------------------------------------------
+  const activeComponent = hasComponents ? resolvedComponents.find((c) => c.id === activeComponentId) ?? resolvedComponents[0] : null
 
-export const V3Artboard: React.FC<{ spec: V3ArtboardSpec }> = ({ spec }) => {
-  const routes = useMemo(() => buildFlatRoutes(spec.modes, spec.sidebar), [spec])
-  // Parse the deep-link hash ONCE, synchronously, so the initial state reflects it.
-  // Doing this in a mount effect races the URL write-back effect (and StrictMode's
-  // double-mount re-reads the already-clobbered hash), which silently dropped the
-  // deep link. #m=<mode>&s=<state>&p=<platform>&v=<viewer|artboard>
-  const initialHash = useMemo(() => {
-    if (typeof window === 'undefined') return null
-    const h = window.location.hash.replace(/^#/, '')
-    if (!h) return null
-    const q = new URLSearchParams(h)
-    return { m: q.get('m'), s: q.get('s'), p: q.get('p') as Platform | null, v: q.get('v') }
-  }, [])
-  const [viewMode, setViewMode] = useState<'viewer' | 'artboard'>(
-    initialHash?.v === 'viewer' || initialHash?.v === 'artboard'
-      ? initialHash.v
-      : spec.defaults?.viewMode ?? 'artboard',
-  )
-  const [platform, setPlatform] = useState<Platform>(
-    initialHash?.p ?? spec.defaults?.platform ?? routes[0]?.platform ?? 'web',
-  )
-  const [currentIdx, setCurrentIdx] = useState(() => {
-    if (initialHash?.m) {
-      const hi = routes.findIndex(
-        (r) =>
-          r.modeId === initialHash.m &&
-          (!initialHash.s || r.stateId === initialHash.s) &&
-          (!initialHash.p || r.platform === initialHash.p),
-      )
-      if (hi >= 0) return hi
-    }
-    const pl = initialHash?.p ?? spec.defaults?.platform ?? routes[0]?.platform ?? 'web'
-    const idx = routes.findIndex((r) => r.platform === pl)
-    return idx >= 0 ? idx : 0
-  })
-  const [zoom, setZoom] = useState(spec.defaults?.zoom ?? 0.4)
-  const [devMode, setDevMode] = useState(false)
-  const [helpOpen, setHelpOpen] = useState(false)
-  const isMobile = useIsMobile()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const sidebar = panelOpen ? (
+    <Sidebar
+      spec={spec}
+      effectiveSidebar={effectiveSidebar}
+      validationIssues={validationIssues}
+      viewMode={viewMode}
+      tab={tab}
+      onTabChange={setTab}
+      hasComponents={hasComponents}
+      activePlatform={activePlatform}
+      onPlatformChange={setActivePlatform}
+      activeMode={activeMode}
+      zoom={zoom}
+      onZoomChange={setZoom}
+      activeModeId={activeMode?.id ?? null}
+      activeStateId={activeState?.id ?? null}
+      itemPlatform={itemPlatform}
+      onItemPlatformChange={(itemId, pf) => setItemPlatform((prev) => ({ ...prev, [itemId]: pf }))}
+      onSelect={selectByIdsInternal}
+      resolvedComponents={resolvedComponents}
+      componentFocusLayout={componentFocusLayout}
+      activeComponentId={activeComponentId}
+      onComponentSelect={(id) => { setActiveComponentId(id); setActiveComponentStateIndex(0) }}
+      activeComponentStateIndex={activeComponentStateIndex}
+      onComponentStateIndexChange={setActiveComponentStateIndex}
+      onHelpClick={() => setHelpOpen(true)}
+      devMode={devMode}
+      onDevModeChange={setDevMode}
+      hiddenSections={hiddenSections}
+      revealedSectionIds={revealedSectionIds}
+      onToggleRevealSection={(id) => setRevealedSectionIds((prev) => ({ ...prev, [id]: !prev[id] }))}
+    />
+  ) : null
 
-  const current = routes[currentIdx]
-  const activeMode = current ? findMode(spec.modes, current.modeId) : undefined
-  const activeState = findState(activeMode, current?.stateId ?? '')
+  // Shared chrome: floating dynamic-island nav + panel-collapse chevron.
+  // Rendered in BOTH the fullscreen-viewer branch and the regular branch so
+  // fullScreenViewer modes still get Prev/Next/Platform/Bird's-eye/Dev/Help
+  // and the sidebar slide-away toggle.
+  const floatingNav = tab !== 'components' && activeMode && activeState ? (
+    <FloatingViewerNav
+      label={activeMode.floatingNavLabel(activeState)}
+      platforms={activeMode.platforms}
+      activePlatform={activePlatform}
+      onPlatformChange={setActivePlatform}
+      viewMode={viewMode}
+      onViewModeChange={(m) => setTab(m)}
+      onPrev={() => goToFlat(currentFlat - 1)}
+      onNext={() => goToFlat(currentFlat + 1)}
+      canPrev={currentFlat > 0}
+      canNext={currentFlat < allStatesFlat.length - 1}
+      onHelp={() => setHelpOpen(true)}
+    />
+  ) : null
 
-  const availablePlatforms = useMemo(() => {
-    const set = new Set<Platform>()
-    spec.modes.forEach((m) => m.platforms.forEach((p) => set.add(p)))
-    const order: Platform[] = ['web', 'mobile', 'native']
-    return order.filter((p) => set.has(p))
-  }, [spec])
-
-  // Keep platform in sync with the active route if the route only supports
-  // one platform.
-  useEffect(() => {
-    if (current && current.platform !== platform) {
-      setPlatform(current.platform)
-    }
-  }, [current?.key])  // eslint-disable-line react-hooks/exhaustive-deps
-
-  const onPrev = useCallback(() => {
-    setCurrentIdx((i) => Math.max(0, i - 1))
-  }, [])
-
-  const onNext = useCallback(() => {
-    setCurrentIdx((i) => Math.min(routes.length - 1, i + 1))
-  }, [routes.length])
-
-  const pickByIds = useCallback(
-    (modeId: string, stateId: string, p: Platform) => {
-      const idx = routes.findIndex(
-        (r) => r.modeId === modeId && r.stateId === stateId && r.platform === p,
-      )
-      if (idx >= 0) {
-        setCurrentIdx(idx)
-        setPlatform(p)
-      }
-    },
-    [routes],
+  const panelToggleBtn = (
+    <button
+      onClick={() => setPanelOpen((v) => !v)}
+      aria-label={panelOpen ? 'Hide sidebar' : 'Show sidebar'}
+      className="fixed top-[14px] z-[70] flex h-7 w-7 items-center justify-center rounded-lg bg-white shadow-sm transition-all hover:bg-grey-03"
+      style={{ left: panelOpen ? 288 + 8 : 8, border: '1px solid var(--v3-border, #d7d6da)', color: 'var(--v3-text-muted, #73727c)' }}
+    >
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="w-3.5 h-3.5">
+        {panelOpen ? <path d="M10 3L5 8l5 5" /> : <path d="M6 3l5 5-5 5" />}
+      </svg>
+    </button>
   )
 
-  // Deep-link read now happens synchronously in the useState initializers above
-  // (see `initialHash`) to avoid the mount-effect race with the write-back below.
-
-  // Keep the URL in sync so the current view is a shareable deep link.
-  useEffect(() => {
-    if (!current) return
-    const h = `m=${current.modeId}&s=${current.stateId}&p=${platform}&v=${viewMode}`
-    window.history.replaceState(null, '', `#${h}`)
-  }, [current?.key, platform, viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Keyboard nav (Arrow keys, Cmd+1/2)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (e.metaKey && e.key === '1') {
-        e.preventDefault()
-        setViewMode('viewer')
-      } else if (e.metaKey && e.key === '2') {
-        e.preventDefault()
-        setViewMode('artboard')
-      } else if (e.key === 'ArrowLeft') {
-        onPrev()
-      } else if (e.key === 'ArrowRight') {
-        onNext()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onPrev, onNext])
-
-  // ctrl-scroll zoom
-  const mainRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return
-      e.preventDefault()
-      setZoom((z) =>
-        Math.min(1, Math.max(0.1, z - e.deltaY * 0.001)),
-      )
-    }
-    const el = mainRef.current
-    if (el) el.addEventListener('wheel', onWheel, { passive: false })
-    return () => {
-      if (el) el.removeEventListener('wheel', onWheel)
-    }
-  }, [])
-
-  const onFrameClick = useCallback(
-    (frame: ArtboardFrameRef) => {
-      pickByIds(frame.modeId, frame.stateId, frame.platform)
-      setViewMode('viewer')
-    },
-    [pickByIds],
+  // Standalone "Exit full screen" pill, sitting just under the floating nav.
+  // Only rendered in the fullscreen-viewer branch below; exits to bird's-eye.
+  const exitFullScreenBtn = (
+    <button
+      type="button"
+      onClick={() => setTab('artboard')}
+      aria-label="Exit full screen"
+      className="fixed left-1/2 z-[79] inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-lg transition-opacity hover:opacity-90"
+      style={{ top: 60, background: '#03072d' }}
+    >
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+        <path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4" />
+      </svg>
+      Exit full screen
+    </button>
   )
 
-  // Scroll the active frame into view + flash a highlight when toggling
-  // viewer -> artboard (or when the route changes while already in artboard).
-  const currentRouteKey = current
-    ? `${current.modeId}/${current.stateId}/${current.platform}`
-    : ''
-  useEffect(() => {
-    if (viewMode !== 'artboard' || !currentRouteKey) return
-    const t = setTimeout(() => {
-      const root = mainRef.current
-      if (!root) return
-      const el = root.querySelector<HTMLElement>(
-        `[data-route-key="${CSS.escape(currentRouteKey)}"]`,
-      )
-      if (!el) return
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      const cls = ['ring-4', 'ring-amber-400']
-      el.classList.add(...cls)
-      const r = setTimeout(() => el.classList.remove(...cls), 1500)
-      ;(el as any).__rmHighlight = r
-    }, 50)
-    return () => clearTimeout(t)
-  }, [viewMode, currentRouteKey])
+  // In viewer mode, a frame-scoped modal overlay (absolute inset-0) gets clipped
+  // by the V3 sidebar's marginLeft. Promote any such overlay to fixed positioning
+  // bounded by --v3-panel-width on the left so the modal fills the non-artboard
+  // area without covering the sidebar. Data-driven: V3Artboard exposes
+  // --v3-panel-width on the root; the override reads it. Scoped to viewer mode
+  // only — artboard (bird's-eye) keeps in-frame absolute z-30 scoping.
+  const viewerModalOverride = tab === 'viewer' ? (
+    <style>{`[data-testid="widgets-modal-overlay"]{position:fixed;top:0;right:0;bottom:0;left:var(--v3-panel-width,0);z-index:90}`}</style>
+  ) : null
+
+  // F4 fullscreen viewer: edge-to-edge frame in <main>, but still get the
+  // floating nav + panel toggle (chrome stays consistent across modes).
+  if (tab === 'viewer' && fullScreen && activeMode && activeState) {
+    return (
+      <DevModeProvider>
+        <div className="font-perk-sans min-h-screen" style={{ background: 'var(--v3-bg-muted, #f8f8fb)', ['--v3-panel-width' as string]: `${panelWidth}px`, ...buildThemeStyle(theme) }} data-v3artboard-root data-v3-fullscreen>
+          {viewerModalOverride}
+          {sidebar}
+          {floatingNav}
+          {exitFullScreenBtn}
+          <main className="transition-all duration-200" style={{ marginLeft: panelWidth, minHeight: '100vh' }}>
+            {panelToggleBtn}
+            {activeMode.renderFrame(activeState, activePlatform, sharedProps, { revealed: revealedSectionIds, fullScreen: true })}
+          </main>
+          {helpOpen && <WelcomeHelpModal items={spec.brand.welcomeHelp ?? DEFAULT_WELCOME_HELP} onClose={closeHelp} />}
+        </div>
+        <DevPanel />
+      </DevModeProvider>
+    )
+  }
 
   return (
-    <div ref={mainRef} className="min-h-screen bg-[#f0f0f0] text-gray-900">
-      {/* Mobile-only: hamburger to open the sidebar drawer. Hidden >= md. */}
-      <button
-        onClick={() => setSidebarOpen(true)}
-        aria-label="Open menu"
-        className="md:hidden fixed top-3 left-3 z-[55] w-10 h-10 flex items-center justify-center rounded-full bg-white border border-gray-200 shadow text-gray-700 active:scale-95"
-      >
-        <span className="text-lg leading-none">☰</span>
-      </button>
+    <DevModeProvider>
+    <div className="flex min-h-screen font-perk-sans" style={{ background: 'var(--v3-bg-muted, #f8f8fb)', ['--v3-panel-width' as string]: `${panelWidth}px`, ...buildThemeStyle(theme) }} data-v3artboard-root>
+      {viewerModalOverride}
+      {sidebar}
+      {floatingNav}
 
-      {/* Mobile-only: backdrop behind the open drawer. */}
-      {isMobile && sidebarOpen && (
-        <div
-          onClick={() => setSidebarOpen(false)}
-          className="md:hidden fixed inset-0 z-[58] bg-black/40"
-        />
-      )}
+      <main className="flex-1 min-w-0 transition-all duration-200" style={{ marginLeft: panelWidth }}>
+        {panelToggleBtn}
 
-      <Sidebar
-        spec={spec}
-        viewMode={viewMode}
-        onViewMode={setViewMode}
-        platform={platform}
-        onPlatform={(p) => {
-          setPlatform(p)
-          const idx = routes.findIndex(
-            (r) =>
-              r.modeId === current?.modeId &&
-              r.stateId === current?.stateId &&
-              r.platform === p,
-          )
-          if (idx >= 0) setCurrentIdx(idx)
-        }}
-        availablePlatforms={availablePlatforms}
-        zoom={zoom}
-        onZoom={setZoom}
-        currentKey={current?.key ?? ''}
-        onPick={(modeId, stateId, p) => {
-          pickByIds(modeId, stateId, p)
-          setSidebarOpen(false) // dismiss drawer after picking on mobile
-        }}
-        mobileOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
+        {tab === 'viewer' && renderViewer()}
+        {tab === 'artboard' && renderArtboard()}
+        {tab === 'components' && activeComponent && (
+          componentFocusLayout === 'detail'
+            ? <ComponentFocusDetailPanel component={activeComponent} activeStateIndex={activeComponentStateIndex} activePlatform={activePlatform} />
+            : <ComponentFocusPanel component={activeComponent} />
+        )}
+      </main>
 
-      {viewMode === 'viewer' && activeMode && activeState && (
-        <Viewer
-          mode={activeMode}
-          state={activeState}
-          platform={platform}
-          zoom={zoom}
-          bleed={isMobile}
-        />
-      )}
-
-      {viewMode === 'artboard' && (
-        <Artboard
-          modes={spec.modes}
-          artboard={spec.artboard ?? []}
-          zoom={zoom}
-          onFrameClick={onFrameClick}
-        />
-      )}
-
-      <FloatingViewerNav
-        routes={routes}
-        currentIdx={currentIdx}
-        onPrev={onPrev}
-        onNext={onNext}
-        platform={platform}
-        availablePlatforms={availablePlatforms}
-        onPlatform={setPlatform}
-        viewMode={viewMode}
-        onViewMode={setViewMode}
-        devMode={devMode}
-        onDevMode={() => setDevMode((d) => !d)}
-        onHelp={() => setHelpOpen(true)}
-        labelOverride={
-          activeMode && activeState
-            ? activeMode.floatingNavLabel?.(activeState, platform)
-            : undefined
-        }
-      />
-
-      {devMode && (
-        <div className="fixed bottom-3 right-3 z-[80] bg-amber-100 border border-amber-300 text-amber-900 rounded px-3 py-2 text-xs max-w-xs shadow">
-          <p className="font-bold">Dev Mode (placeholder)</p>
-          <p>
-            Inspector overlay not yet wired. tokens.ts registry deferred. Click target
-            -&gt; source file:line coming.
-          </p>
-        </div>
-      )}
-
-      {helpOpen && <HelpModal spec={spec} onClose={() => setHelpOpen(false)} />}
+      {helpOpen && <WelcomeHelpModal items={spec.brand.welcomeHelp ?? DEFAULT_WELCOME_HELP} onClose={closeHelp} />}
     </div>
+    <DevPanel />
+    </DevModeProvider>
   )
-}
+})
+
+V3Artboard.displayName = 'V3Artboard'
+
+export default V3Artboard

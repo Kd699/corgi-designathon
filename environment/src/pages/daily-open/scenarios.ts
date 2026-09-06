@@ -1,7 +1,7 @@
 // Daily-open scenarios. Each is a full Signals snapshot of a moment where the environment
 // ALREADY knows you: history exists, passive inputs are live, a read has been made before you looked.
-// Data only. Adding a scenario is one entry here and one ScreenState, never a renderer change.
-import type { ScreenState } from '../../components/v3artboard';
+// Data only. Adding a scenario is one entry here and one StateConfig, never a renderer change.
+import type { StateConfig } from '../../components/v3artboard';
 import type { Signals } from '../../engine/signals';
 
 export type ScenarioId = 'monday-wound-up' | 'wednesday-steady' | 'thursday-heavy' | 'sunday-light';
@@ -13,7 +13,7 @@ export const SCENARIO_SIGNALS: Record<ScenarioId, Signals> = {
   'sunday-light': { heartRate: 66, motion: 0.12, hour: 9, idleSeconds: 4, mood: 5, feedback: 1, objective: 'wander' },
 };
 
-export const SCENARIOS: ScreenState[] = [
+export const SCENARIOS: StateConfig[] = [
   { id: 'monday-wound-up', label: 'Monday 07:40', description: 'Up early, already moving, rated low last night. Opens the app on the way in.' },
   { id: 'wednesday-steady', label: 'Wednesday 14:10', description: 'Nothing wrong, nothing special. The ordinary case the design has to survive.' },
   { id: 'thursday-heavy', label: 'Thursday 22:30', description: 'Late. Body has wound down but the mood has not. The read most likely to land wrong.' },

@@ -2,7 +2,7 @@
 // The chrome — surface, objective nav, correction lever — is written once. Only the body
 // differs, and each body is a PURE PROJECTION of EnvSpec: no branching on raw signals, and
 // no `concept === 'x' ? ... : ...`. Wording comes from CONCEPT_CONFIG.
-import { useCallback, useMemo, useState, type JSX, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { derive, type Component, type EnvSpec } from '../../engine/derive';
 import type { Objective, Signals } from '../../engine/signals';
 import Mascot from '../../ui/Mascot';
@@ -38,13 +38,16 @@ const mute = (spec: EnvSpec): EnvSpec => ({ ...spec, mascot: { ...spec.mascot, l
 function Surface({ spec, children }: { spec: EnvSpec; children: ReactNode }) {
   return (
     <div
-      className={`h-full overflow-y-auto tex-${spec.texture}`}
+      // flex-1/min-h-0 rather than h-full: the phone shell is a flex column, and a
+      // percentage height against an auto-height (grow) frame collapses to the content,
+      // leaving dead space under the surface.
+      className={`flex min-h-0 flex-1 flex-col overflow-y-auto tex-${spec.texture}`}
       style={{
         background: `linear-gradient(160deg, ${spec.palette.from}, ${spec.palette.to})`,
         color: spec.palette.ink, fontSize: spec.type.size, fontWeight: spec.type.weight, letterSpacing: spec.type.tracking,
       }}
     >
-      <div className={`flex min-h-full flex-col gap-6 px-5 py-9 tex-${spec.texture}`}>{children}</div>
+      <div className={`flex min-h-full flex-1 flex-col gap-6 px-5 py-9 tex-${spec.texture}`}>{children}</div>
     </div>
   );
 }
