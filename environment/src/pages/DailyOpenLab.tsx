@@ -24,6 +24,7 @@ import { WEEK_VIEWS } from './daily-open/week'
 import { WEEK_SKY_MODE, WEEK_SKY_ID, WEEK_SKY_CONFIG } from './daily-open/week-stage-sky'
 import { DAYBOARD_MODE, DAYBOARD_ID, DAYBOARD_CONFIG, DAYBOARD_STATES } from './daily-open/dayboard-mode'
 import { MORPH_MODE, MORPH_ID, MORPH_CONFIG, MORPH_STATES } from './daily-open/morph-board'
+import { CALM_MODE, CALM_ID, CALM_CONFIG, CALM_STATES } from './daily-open/logging-calm'
 import { STANDARD_WELCOME_HELP } from './_shared/v3artboard-welcome-help'
 
 const mobile = 'mobile' as const
@@ -42,7 +43,7 @@ const SPEC = defineV3ArtboardSpec({
       { kbd: 'Components', text: 'The third tab renders each real component on its own, against every scenario palette.' },
     ],
   },
-  modes: [...DAILY_OPEN_MODES, ...WEEK_MODES, WEEK_SKY_MODE, DAYBOARD_MODE, MORPH_MODE],
+  modes: [...DAILY_OPEN_MODES, ...WEEK_MODES, WEEK_SKY_MODE, DAYBOARD_MODE, MORPH_MODE, CALM_MODE],
   componentFocus: DAILY_OPEN_COMPONENTS,
   componentFocusLayout: 'detail',
   defaults: { viewMode: 'artboard', platform: mobile, zoom: 0.5, frameHeight: 'auto' },
@@ -162,6 +163,20 @@ const SPEC = defineV3ArtboardSpec({
             options: [{ modeId: MORPH_ID, stateId: st.id, platform: web, platformLabel: 'D' }],
           })),
         },
+      },
+      // D3: the one on the Logging tab. Same loop as D1/D2 with everything but the loop removed.
+      {
+        id: `sb-${CALM_ID}`,
+        label: CALM_CONFIG.label,
+        description: CALM_CONFIG.thesis,
+        options: [{ modeId: CALM_ID, stateId: CALM_STATES[1].id, platform: web, platformLabel: 'D' }],
+        subgroup: {
+          label: 'Phases',
+          items: CALM_STATES.map((st) => ({
+            id: `sb-${CALM_ID}-${st.id}`, label: st.label, description: st.description,
+            options: [{ modeId: CALM_ID, stateId: st.id, platform: web, platformLabel: 'D' }],
+          })),
+        },
       }],
     },
   ],
@@ -200,6 +215,18 @@ const SPEC = defineV3ArtboardSpec({
         maxWidth: 420,
         arrowAfter: true as const,
         frames: [{ modeId: MORPH_ID, stateId: st.id, platform: web, rawFrame: true, fitHeight: true }],
+      })),
+    },
+    // D3 — what ships on the Logging tab. Before / after, two frames, nothing else.
+    {
+      id: `board-${CALM_ID}`,
+      divider: 'thick' as const,
+      flowBadge: { label: 'Dayboard · shipped' },
+      title: CALM_CONFIG.label,
+      description: `${CALM_CONFIG.thesis} ${CALM_CONFIG.risk}`,
+      steps: CALM_STATES.map((st, i) => ({
+        badge: i + 1, title: st.label, description: st.description, maxWidth: 420, arrowAfter: true as const,
+        frames: [{ modeId: CALM_ID, stateId: st.id, platform: web, rawFrame: true, fitHeight: true }],
       })),
     },
     // The week screen, three concepts deep. One row per concept so a direction reads as a

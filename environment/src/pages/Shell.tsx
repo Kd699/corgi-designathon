@@ -1,17 +1,17 @@
 /* The final page: two tabs.
  *
  * Intervention is Kyler's /clouds voice session — you talk, the sky and the motif answer
- * while you are still speaking. Logging is D2, the morph board — you write the day in the
- * middle of Joseph's page, the widgets read it as you type, and Send docks the ones that
- * earned a place. (D1, the plain grid, stays on the concept board for comparison.) Two
- * answers to the same question, side by side; the tab pair is the argument.
+ * while you are still speaking. Logging is D3 — the dayboard wearing the same clothes: sky,
+ * circle, line, pill, and Grok's cards sweeping out from behind the circle on Send. (D1 and
+ * D2 stay on the concept board for comparison.) Two answers to the same question, side by
+ * side; the tab pair is the argument.
  *
  * Each tab owns a hash so either is linkable and back works. `#/day` still lands on Logging
  * because that link is already in circulation. The tab list is data: a third paradigm is one
  * entry, and nothing here knows which tab it is rendering.
  */
 import type { ReactNode } from 'react';
-import { MorphBoard } from './daily-open/morph-board';
+import { LoggingCalm } from './daily-open/logging-calm';
 import CloudsPage from './clouds/page';
 import './shell.css';
 
@@ -37,10 +37,10 @@ export const SHELL_TABS: ShellTab[] = [
   {
     id: 'logging',
     label: 'Logging',
-    blurb: 'write the day, the widgets dock around it',
+    blurb: 'say the day, the cards come out',
     hash: '#/logging',
     aliases: ['#/day'],
-    render: () => <MorphBoard />,
+    render: () => <LoggingCalm />,
   },
 ];
 

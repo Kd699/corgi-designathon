@@ -1,0 +1,65 @@
+/* D3 · Logging, calm. Kyler's /clouds vocabulary (clouds-widgets.tsx CSS, clouds-motif)
+ * with an lg- prefix: sky full-bleed, one white circle, a serif line, an italic pill, and glass
+ * cards that sweep out from behind the circle. His card and arc rules are reproduced rather
+ * than imported because his live inside a module-scoped string. Same numbers. */
+
+.lg { position: relative; min-height: 100vh; overflow: hidden; color: #fff; font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; }
+.lg > .absolute { z-index: 0; }
+.lg-stage { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+/* The circle: his motif window, our face in it. */
+.lg-circle { position: relative; width: min(30vmin, 240px); height: min(30vmin, 240px); border-radius: 50%; background: #fff; display: grid; place-items: center;
+  box-shadow: 0 30px 80px rgba(20,22,30,.18); transition: transform .6s cubic-bezier(.22,1,.36,1); }
+.lg-circle[data-thinking="true"] { animation: lg-breathe 1.6s ease-in-out infinite; }
+@keyframes lg-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+.lg-circle .motif-mascot { width: 62%; height: 62%; }
+.lg-circle .button-shape { display: none; }          /* the circle IS the body */
+.lg-circle .character-face { width: 100%; height: 100%; color: #172322; }
+
+/* The line under it. Serif like his greeting; the model's read replaces it after Send. */
+.lg-line { margin-top: 26px; max-width: 24ch; text-align: center; font-family: 'Instrument Serif', 'PP Editorial Old', Georgia, serif; font-size: clamp(26px, 3.6vmin, 40px); line-height: 1.12; letter-spacing: -.01em; text-shadow: 0 2px 24px rgba(20,22,30,.25); text-wrap: balance; }
+.lg-sub { margin-top: 10px; max-width: 46ch; text-align: center; font-size: 14px; opacity: .85; text-shadow: 0 1px 12px rgba(20,22,30,.3); }
+
+/* The pill. */
+.lg-pill { margin-top: 28px; display: flex; align-items: center; width: min(560px, 86vw); border-radius: 999px; background: rgba(255,255,255,.92); box-shadow: 0 16px 40px rgba(20,22,30,.16); padding: 6px 6px 6px 22px; color: #1a1c22; }
+.lg-pill input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font: inherit; font-size: 15px; font-style: italic; color: #1a1c22; }
+.lg-pill input::placeholder { color: rgba(26,28,34,.55); font-style: italic; }
+.lg-pill button { width: 38px; height: 38px; border-radius: 50%; border: 0; background: #14151a; color: #fff; display: grid; place-items: center; cursor: pointer; font-size: 16px; }
+.lg-pill button:disabled { opacity: .35; cursor: default; }
+.lg-hints { margin-top: 12px; display: flex; gap: 8px; }
+.lg-hint { border: 1px solid rgba(255,255,255,.55); background: rgba(255,255,255,.14); backdrop-filter: blur(8px); color: #fff; border-radius: 999px; padding: 5px 11px; font-size: 11px; cursor: pointer; }
+.lg-status { margin-top: 12px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; opacity: .7; }
+
+/* The ring of cards. Same trick as his arc: the radial mask hides a card while it is still
+ * inside the circle's radius, so each one reads as coming out from BEHIND the circle. */
+.lg-ring { position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent calc(min(30vmin, 240px) * .47), #000 calc(min(30vmin, 240px) * .5));
+  mask: radial-gradient(circle at 50% 50%, transparent calc(min(30vmin, 240px) * .47), #000 calc(min(30vmin, 240px) * .5)); }
+.lg-slot { position: absolute; left: 50%; top: 50%; --lg-r: calc(-1 * min(44vmin, 340px));
+  /* outer ring: the sixth card onward, one card-height further out */
+  &[data-ring="1"] { --lg-r: calc(-1 * min(62vmin, 480px)); }
+  transform: translate(-50%, -50%) rotate(var(--lg-a, 0deg)) translateY(var(--lg-r)) rotate(calc(-1 * var(--lg-a, 0deg)));
+  animation: lg-arc 1100ms cubic-bezier(.22, 1, .36, 1) both; animation-delay: var(--lg-d, 0ms); }
+@keyframes lg-arc {
+  from { transform: translate(-50%, -50%) rotate(0deg) translateY(calc(var(--lg-r) * .3)) rotate(0deg); opacity: 0; filter: blur(18px); }
+  55%  { opacity: 1; }
+  to   { transform: translate(-50%, -50%) rotate(var(--lg-a, 0deg)) translateY(var(--lg-r)) rotate(calc(-1 * var(--lg-a, 0deg))); opacity: 1; filter: blur(0); }
+}
+.lg-slot.leaving { animation: lg-leave 500ms ease both; }
+@keyframes lg-leave { to { opacity: 0; filter: blur(12px); transform: translate(-50%, -50%) rotate(var(--lg-a, 0deg)) translateY(calc(var(--lg-r) * .6)) rotate(calc(-1 * var(--lg-a, 0deg))); } }
+
+.lg-card { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px 10px; border-radius: 18px; min-width: 150px; max-width: 230px; pointer-events: auto;
+  /* a touch more glass than his .14: our sky runs paler (Morning/Midday) and white type on it needs the lift */
+  background: rgba(255,255,255,.22); border: 1px solid rgba(255,255,255,.4); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; text-align: left; text-shadow: 0 1px 10px rgba(20,22,30,.22); }
+.lg-title { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; opacity: .75; }
+.lg-headline { font-size: 22px; font-weight: 500; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.lg-headline.text { font-size: 15px; font-weight: 500; line-height: 1.25; }
+.lg-sub2 { font-size: 11px; opacity: .82; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-body { display: contents; }
+.lg-body > * { animation: lg-fade 320ms ease both; }
+@keyframes lg-fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.lg-sk { display: block; border-radius: 6px; background: linear-gradient(90deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.38) 50%, rgba(255,255,255,.12) 100%); background-size: 200% 100%; animation: lg-shimmer 1.15s linear infinite; }
+.lg-sk-h { width: 72px; height: 22px; margin: 1px 0; }
+.lg-sk-s { width: 132px; height: 11px; margin: 1px 0 2px; }
+@keyframes lg-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .lg-slot, .lg-sk, .lg-body > *, .lg-circle[data-thinking="true"] { animation: none; } }
