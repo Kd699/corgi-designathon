@@ -1,0 +1,36 @@
+/* Shell chrome. Deliberately thin: both surfaces are full-bleed and neither should feel
+ * like it is living inside a frame, so the tabs float over the top-left rather than
+ * occupying a bar the surfaces have to work around. */
+.shell { position: relative; min-height: 100vh; }
+
+.shell-tabs {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 50;
+  display: flex;
+  gap: 4px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(14px);
+  padding: 4px;
+  box-shadow: 0 10px 30px rgba(16, 18, 28, 0.16);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.shell-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-radius: 11px;
+  padding: 7px 13px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(20, 21, 26, 0.7);
+  text-decoration: none;
+}
+.shell-tab[data-state="current"] { background: #14151a; color: #fff; }
+.shell-tab-blurb { font-size: 10px; font-weight: 500; opacity: 0.65; }
+
+.shell-body { min-height: 100vh; }

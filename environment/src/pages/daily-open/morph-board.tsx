@@ -22,6 +22,7 @@ import { read, think } from '../dayboard/agent';
 import { EMPTY_DAY, type DayState, type WidgetId } from '../dayboard/types';
 import { WIDGETS } from '../dayboard/widgets';
 import { PROMPTS } from '../DayboardPage';
+import DaySky from './day-sky';
 import '../dayboard/dayboard.css';
 import './morph-board.css';
 
@@ -294,8 +295,9 @@ export function MorphBoard({ seed = '', phase = 'blank' }: { seed?: string; phas
   const docked = pieces.filter((p) => p.edge).length;
 
   return (
-    <main className="dayboard morph-board">
-      <section className="mb-intro">
+    <main className="dayboard morph-board relative">
+      <DaySky day={day} />
+      <section className="mb-intro relative">
         <div>
           <h1>How was your day?</h1>
           <p>Write it in the page. Drag widgets from the library; they read what you write and dock when you send.</p>
@@ -303,7 +305,7 @@ export function MorphBoard({ seed = '', phase = 'blank' }: { seed?: string; phas
         <button onClick={() => { setPieces([]); setActive(null); setMessage('Widgets cleared. Your writing is still here.'); }}>↺ Reset widgets</button>
       </section>
 
-      <div className="mb-layout">
+      <div className="mb-layout relative">
         <aside className="mb-library">
           <h2>Widgets <span>{LIBRARY.length}</span></h2>
           {LIBRARY.map((w) => (
@@ -331,7 +333,7 @@ export function MorphBoard({ seed = '', phase = 'blank' }: { seed?: string; phas
                     <feColorMatrix type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 22 -10" />
                   </filter>
                 </defs>
-                <g fill="#e0edba" filter="url(#morph-goo)">
+                <g fill="#ffffff" filter="url(#morph-goo)">
                   <AnimatedSurface box={body} />
                   {pieces.filter((p) => !p.edge).map((p) => <AnimatedSurface key={p.id} box={positions.get(p.id)!} />)}
                 </g>
@@ -420,9 +422,14 @@ export const MORPH_MODE: ScreenMode = {
   description: MORPH_CONFIG.thesis,
   platforms: ['web'],
   states: MORPH_STATES,
-  renderFrame: (state) => {
+  fullScreenViewer: true,
+  renderFrame: (state, _platform, _shared, ctx) => {
     const p = phaseFor(state.id);
-    return <DesktopFrame url="spacetime.app/day/morph" height={1000}><MorphBoard seed={p.seed} phase={p.phase} /></DesktopFrame>;
+    return (
+      <DesktopFrame url="spacetime.app/day/morph" height={1000} fullScreen={ctx?.fullScreen}>
+        <MorphBoard seed={p.seed} phase={p.phase} />
+      </DesktopFrame>
+    );
   },
   renderArtboardFrame: (state) => {
     const p = phaseFor(state.id);

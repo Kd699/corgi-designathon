@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { read, think } from './dayboard/agent';
 import { EMPTY_DAY, type AgentReply, type DayState } from './dayboard/types';
 import { WIDGETS } from './dayboard/widgets';
+import DaySky from './daily-open/day-sky';
 import './dayboard/dayboard.css';
 
 /* The three seeds. Exported because the artboard frames are these same accounts run through
@@ -84,9 +85,11 @@ export default function DayboardPage({ seed, frozen }: { seed?: string; frozen?:
     : 'Nothing yet';
 
   return (
-    <div className={`dayboard ${frozen ? 'h-full overflow-y-auto' : 'min-h-screen'}`}>
-      <div className="mx-auto flex max-w-[1180px] flex-col gap-7 px-8 py-10">
-        <header className="flex flex-col gap-1">
+    <div className={`dayboard dayboard--sky relative ${frozen ? 'h-full overflow-y-auto' : 'min-h-screen'}`}>
+      {/* The weather is the page; everything else is a white card on it. */}
+      <DaySky day={day} />
+      <div className="relative mx-auto flex max-w-[1180px] flex-col gap-7 px-8 py-10">
+        <header className="db-plate flex flex-col gap-1">
           <p className="text-[11px] uppercase tracking-[0.18em] db-muted">Spacetime · dayboard</p>
           <h1 className="text-[34px] leading-tight" style={{ fontWeight: 650 }}>How was your day?</h1>
           <p className="max-w-[60ch] text-[15px] db-muted">
@@ -95,7 +98,7 @@ export default function DayboardPage({ seed, frozen }: { seed?: string; frozen?:
           </p>
         </header>
 
-        {!frozen && <div className="flex flex-col gap-3">
+        {!frozen && <div className="db-plate flex flex-col gap-3">
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}

@@ -40,9 +40,11 @@ export const DAYBOARD_MODE: ScreenMode = {
   description: DAYBOARD_CONFIG.thesis,
   platforms: ['web'],
   states: DAYBOARD_STATES,
-  // Viewer: the live page, composer and all — type into it and the widgets move.
-  renderFrame: (state) => (
-    <DesktopFrame url="spacetime.app/day" height={900}>
+  // Viewer: the live page, composer and all — type into it and the widgets move. Full screen
+  // drops the 1440 browser-chrome card so the sky runs edge to edge, like the TRS lab pages.
+  fullScreenViewer: true,
+  renderFrame: (state, _platform, _shared, ctx) => (
+    <DesktopFrame url="spacetime.app/day" height={900} fullScreen={ctx?.fullScreen}>
       <DayboardPage seed={seedFor(state.id)} />
     </DesktopFrame>
   ),

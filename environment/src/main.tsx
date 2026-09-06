@@ -2,7 +2,7 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import DailyOpenLab from './pages/DailyOpenLab';
-import DayboardPage from './pages/DayboardPage';
+import Shell, { SHELL_TABS } from './pages/Shell';
 import CloudsPage from './pages/clouds/page';
 import WidgetsPage from './pages/widgets/page';
 import MoodsPage from './pages/moods/page';
@@ -15,8 +15,12 @@ import './index.css';
  * hash itself (#m=…&s=…&p=…&v=… selects a mode/state/platform/view), so a link someone
  * pastes into Slack opens on the exact frame they meant. `#/app` is the escape hatch to
  * the bare environment — the same components, no board around them. `/clouds` (and
- * `#/clouds`) is the sky brought over from next-personal, and `#/day` is the dayboard —
- * talk about your day, Grok composes the widgets. */
+ * `#/clouds`) is the sky brought over from next-personal.
+ *
+ * `#/day` and `#/intervention` are the two paradigms and they share a shell: the dayboard —
+ * talk about your day, Grok composes the widgets — and the intervention, where a CBT
+ * protocol answers you while you are still speaking. Each tab keeps its own hash, so the
+ * `#/day` links already in circulation land exactly where they used to. */
 function isClouds(path: string, hash: string) {
   return path === '/clouds' || path.startsWith('/clouds/') || hash.startsWith('#/clouds');
 }
@@ -45,7 +49,9 @@ function Root() {
   if (isClouds(loc.path, loc.hash)) return <CloudsPage />;
   if (isWidgets(loc.path, loc.hash)) return <WidgetsPage />;
   if (isMoods(loc.path, loc.hash)) return <MoodsPage />;
-  if (loc.hash.startsWith('#/day')) return <DayboardPage />;
+  // The two paradigms share a shell; each tab owns its hash (#/day, #/intervention).
+  const tab = SHELL_TABS.find((t) => loc.hash.startsWith(t.hash));
+  if (tab) return <Shell tabId={tab.id} />;
   return loc.hash.startsWith('#/app') ? <App /> : <DailyOpenLab />;
 }
 

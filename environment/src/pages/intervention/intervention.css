@@ -1,0 +1,168 @@
+/* Intervention tokens. Scoped to .intervention so nothing here reaches the board or the
+ * dayboard. Everything sits over a live sky, so the surfaces are glass rather than paint —
+ * the weather has to stay visible through the panel, or the reaction is happening somewhere
+ * the user is not looking. */
+.intervention {
+  --iv-ink: #14151a;
+  --iv-muted: rgba(20, 21, 26, 0.62);
+  --iv-glass: rgba(255, 255, 255, 0.72);
+  --iv-glass-line: rgba(255, 255, 255, 0.55);
+  --iv-shadow: 0 24px 60px rgba(16, 18, 28, 0.18);
+  position: relative;
+  height: 100%;
+  min-height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  color: var(--iv-ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.intervention-sky-layer { position: absolute; inset: 0; }
+.intervention-sky-fallback { height: 100%; width: 100%; background: linear-gradient(#b8cbe0, #e6dfd4); }
+
+.intervention-stage {
+  position: relative;
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 48px 24px 36px;
+}
+
+.intervention-centre { position: relative; width: 100%; max-width: 680px; }
+.intervention-mascot { position: absolute; top: -78px; left: 18px; z-index: 2; }
+
+.intervention-panel {
+  position: relative;
+  border-radius: 22px;
+  border: 1px solid var(--iv-glass-line);
+  background: var(--iv-glass);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--iv-shadow);
+  padding: 30px 30px 24px;
+}
+
+.intervention-step-name {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--iv-muted);
+}
+.intervention-prompt { margin: 0 0 18px; font-size: 26px; line-height: 1.25; font-weight: 600; }
+
+.intervention-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.5);
+  padding: 8px 12px;
+}
+.intervention-field-empty { font-size: 13px; color: var(--iv-muted); }
+
+/* Arrive and settle: a glyph rises once into place and then stops moving. Nothing loops —
+ * a field of animating emoji over a moving sky is noise, and the point is that the emoji
+ * are the words, not decoration. */
+.intervention-emoji {
+  font-size: 24px;
+  line-height: 1;
+  animation: intervention-settle 460ms cubic-bezier(0.22, 0.8, 0.3, 1) both;
+}
+@keyframes intervention-settle {
+  from { opacity: 0; transform: translateY(7px) scale(0.86); }
+  to { opacity: 1; transform: none; }
+}
+
+.intervention-transcript {
+  margin: 12px 0 0;
+  min-height: 22px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: rgba(20, 21, 26, 0.8);
+}
+
+.intervention-controls { display: flex; gap: 10px; margin-top: 16px; }
+.intervention-mic {
+  flex: none;
+  border: 1px solid rgba(20, 21, 26, 0.16);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.intervention-mic[data-listening="true"] { background: #14151a; color: #fff; border-color: #14151a; }
+.intervention-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(20, 21, 26, 0.16);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 9px 14px;
+  font: inherit;
+  font-size: 15px;
+  color: inherit;
+}
+.intervention-input:focus { outline: 2px solid rgba(20, 21, 26, 0.35); outline-offset: 1px; }
+
+/* Failure gets a sentence, not a dead button. */
+.intervention-status { margin: 10px 0 0; font-size: 13px; color: #8a3c1f; }
+.intervention-read { margin: 12px 0 0; font-size: 12px; letter-spacing: 0.02em; color: var(--iv-muted); }
+
+.intervention-rail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--iv-glass-line);
+  background: var(--iv-glass);
+  backdrop-filter: blur(14px);
+  padding: 7px 9px;
+  box-shadow: var(--iv-shadow);
+}
+.intervention-rail-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--iv-muted);
+  cursor: pointer;
+}
+.intervention-rail-step[data-state="current"] { background: #14151a; color: #fff; font-weight: 600; }
+.intervention-rail-step[data-state="done"] { color: rgba(20, 21, 26, 0.85); }
+.intervention-rail-dot {
+  height: 6px;
+  width: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.5;
+}
+.intervention-rail-step[data-state="current"] .intervention-rail-dot { opacity: 1; }
+
+.intervention-next {
+  border: 1px solid rgba(20, 21, 26, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.intervention-next:disabled { opacity: 0.4; cursor: default; }
+
+.intervention-footnote { margin: 0; font-size: 12px; color: rgba(20, 21, 26, 0.55); }

@@ -33,6 +33,14 @@
 }
 
 .db-panel { background: var(--db-panel); border: 1px solid var(--db-line); }
+
+/* Over the sky: the ground is the weather, so the cards go plain white with a soft lift
+ * instead of a hairline, and the header/composer sit on the same kind of plate. Dark mode
+ * keeps its own panel tone; the sky is dark then too. */
+.dayboard--sky { background: transparent; }
+.dayboard--sky .db-panel { border-color: transparent; box-shadow: 0 1px 2px rgba(20,22,30,.06), 0 12px 32px rgba(20,22,30,.10); }
+.dayboard--sky .db-plate { background: var(--db-panel); border-radius: 18px; padding: 20px 22px; box-shadow: 0 1px 2px rgba(20,22,30,.06), 0 12px 32px rgba(20,22,30,.10); }
+.dayboard--sky .db-plate textarea { border: 1px solid var(--db-line); box-shadow: none; }
 .db-muted { color: var(--db-muted); }
 
 /* A widget the agent has just surfaced arrives rather than blinking into place. Entry only —

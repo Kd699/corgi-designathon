@@ -273,3 +273,26 @@ export function reactTo(text: string, step: ProtocolStep): Reaction {
 
 /** Counts, for the report and for anyone auditing the table's coverage. */
 export const LEXICON_SIZE = { emoji: EMOJI.length, tones: TONES.length };
+
+/* The corner of the valence/arousal plane each expression lives in.
+ *
+ * deriveMotif() derives the expression from the read rather than accepting one, so to make
+ * the character wear the expression the words asked for, the read is handed to it already
+ * standing in the right quadrant. Measured arousal still modulates inside that quadrant —
+ * a tense sentence and a very tense sentence are the same face at different amplitudes. */
+export const MASCOT_DRIVE: Record<Expression, {
+  valence: number;
+  arousal: number;
+  idleSeconds: number;
+  /** The band measured arousal is allowed to move inside. deriveMotif() splits high from
+   *  low at 0.6 and sleep at 90 idle seconds, so a band that never crosses its own side of
+   *  those lines is what keeps the derived expression equal to the one the words asked for
+   *  while still letting a very tense sentence read louder than a mildly tense one. */
+  arousalBand: readonly [number, number];
+}> = {
+  excited: { valence: 0.7, arousal: 0.85, idleSeconds: 0, arousalBand: [0.66, 1] },
+  content: { valence: 0.55, arousal: 0.3, idleSeconds: 0, arousalBand: [0.05, 0.55] },
+  tense: { valence: -0.6, arousal: 0.85, idleSeconds: 0, arousalBand: [0.66, 1] },
+  weary: { valence: -0.55, arousal: 0.25, idleSeconds: 0, arousalBand: [0.05, 0.55] },
+  asleep: { valence: 0, arousal: 0.1, idleSeconds: 120, arousalBand: [0.02, 0.3] },
+};
