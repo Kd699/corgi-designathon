@@ -46,7 +46,6 @@ const CSS = /* css */ `
 .ch-card { border-radius: 20px; padding: 16px 18px 15px; background: #fff; color: #111;
   border: 1px solid rgba(0,0,0,0.08); text-align: left; }
 .ch-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(0,0,0,0.6); }
-.ch-pill { padding: 0.2em 0.7em; border-radius: 999px; border: 1px solid rgba(0,0,0,0.2); background: rgba(0,0,0,0.04); color: rgba(0,0,0,0.72); letter-spacing: 0.06em; text-transform: none; }
 .ch-heading { margin: 8px 0 4px; font-family: 'PP Editorial Old', ui-serif, Georgia, serif; font-weight: 400; font-size: 23px; line-height: 1.15; }
 .ch-summary { margin: 0; font-size: 14px; line-height: 1.6; color: rgba(0,0,0,0.7); }
 .ch-empty { opacity: 0.65; font-size: 13px; text-align: center; padding: 12px; }
@@ -89,9 +88,6 @@ export default function SessionHistory({ items, inverted }: { items: HistoryItem
           <article className="ch-card" key={item.at}>
             <div className="ch-meta">
               <time dateTime={item.at}>{when(item.at)}</time>
-              <span className="ch-pill">{item.mood}</span>
-              <span className="ch-pill">{item.sky}</span>
-              {item.source === "local" && <span className="ch-pill">local read</span>}
             </div>
             <h3 className="ch-heading">{item.heading}</h3>
             <p className="ch-summary">{item.summary}</p>
