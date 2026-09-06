@@ -19,7 +19,7 @@ import { EMPTY_DAY, type DayState, type WidgetId } from '../dayboard/types';
 import { PROMPTS } from '../DayboardPage';
 import { derive } from '../../engine/derive';
 import { deriveMotif } from './motif';
-import MotifMascot from './MotifMascot';
+import { SPECS, blobPath, type MotifMood } from '../clouds/clouds-motif';
 import DaySky from './day-sky';
 import './logging-calm.css';
 
@@ -62,9 +62,13 @@ function slots(n: number): { angle: number; ring: 0 | 1 }[] {
     const step = span / (count - 1);
     return Array.from({ length: count }, (_, i) => -span / 2 + i * step + shift).sort((a, b) => Math.abs(a) - Math.abs(b));
   };
-  const inner = spread(Math.min(n, INNER), 0).map((angle) => ({ angle, ring: 0 as const }));
-  const outerCount = Math.max(0, n - INNER);
-  const outer = outerCount ? spread(outerCount, outerCount > 1 ? 0 : 0).map((angle) => ({ angle: angle * 0.9, ring: 1 as const })) : [];
+  const innerAngles = spread(Math.min(n, INNER), 0);
+  const inner = innerAngles.map((angle) => ({ angle, ring: 0 as const }));
+  // Outer cards sit at the midpoints BETWEEN inner cards, nearest the top first, so an outer
+  // card is never directly behind an inner one.
+  const sorted = [...innerAngles].sort((a, b) => a - b);
+  const mids = sorted.slice(1).map((a, i) => (a + sorted[i]) / 2).sort((a, b) => Math.abs(a) - Math.abs(b));
+  const outer = mids.slice(0, Math.max(0, n - INNER)).map((angle) => ({ angle, ring: 1 as const }));
   return [...inner, ...outer];
 }
 
@@ -84,6 +88,49 @@ function GlassCard({ spec, delay }: { spec: CardSpec; delay: number }) {
         <><span className="lg-sk lg-sk-h" /><span className="lg-sk lg-sk-s" /></>
       )}
     </div>
+  );
+}
+
+/* ── the motif: Kyler's, not ours ──────────────────────────────────────── */
+
+/* Our five expressions are his five moods, capitalised. */
+const MOOD_FOR: Record<ReturnType<typeof deriveMotif>['face']['expression'], MotifMood> = {
+  content: 'Content', excited: 'Excited', tense: 'Tense', weary: 'Weary', asleep: 'Asleep',
+};
+
+/**
+ * The same shape and face as /clouds: his blobPath() at his SPECS[mood] geometry, drawn the
+ * way his normal (non-inverted) look draws it — a white body with the eyes and brows cut
+ * out to the sky. No circle around it any more; on his page the blob IS the body, and the
+ * user noticed the difference.
+ */
+function LogMotif({ mood, thinking }: { mood: MotifMood; thinking: boolean }) {
+  const f = SPECS[mood] ?? SPECS.Content;
+  const d = blobPath(f.pleasant, f.energy);
+  const face = (
+    <g transform="translate(14 14) scale(0.72)" className="lgm-face" style={{ '--lgm-blink': `${f.blinkSeconds}s`, '--lgm-gaze': `${f.gazePixels}px` } as CSSProperties}>
+      <g className="lgm-gaze">
+        <g className="lgm-brows" style={{ opacity: f.browOpacity }}>
+          <path d="M 30 25 L 42 25" style={{ transform: `rotate(${f.browTilt}deg)`, transformOrigin: '36px 25px' }} />
+          <path d="M 58 25 L 70 25" style={{ transform: `rotate(${-f.browTilt}deg)`, transformOrigin: '64px 25px' }} />
+        </g>
+        <g style={{ transform: `rotate(${f.eyeTilt}deg)`, transformOrigin: '36px 44px' }}>
+          <g className="lgm-blink"><rect className="lgm-eye" x="30.5" y={44 - f.eyeHeight / 2} width="11" height={f.eyeHeight} rx="5.5" /></g>
+        </g>
+        <g style={{ transform: `rotate(${-f.eyeTilt}deg)`, transformOrigin: '64px 44px' }}>
+          <g className="lgm-blink"><rect className="lgm-eye" x="58.5" y={44 - f.eyeHeight / 2} width="11" height={f.eyeHeight} rx="5.5" /></g>
+        </g>
+      </g>
+    </g>
+  );
+  return (
+    <svg className="lgm" viewBox="0 0 100 100" data-thinking={thinking} aria-label={`mascot ${mood.toLowerCase()}`} role="img">
+      <mask id="lgm-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+        <rect width="100" height="100" fill="#fff" />
+        <g fill="#000" stroke="#000">{face}</g>
+      </mask>
+      <path className="lgm-shape" d={d} style={{ d: `path('${d}')` } as CSSProperties} fill="#fff" mask="url(#lgm-mask)" />
+    </svg>
   );
 }
 
@@ -143,7 +190,7 @@ export function LoggingCalm({ seed = '', sent = false }: { seed?: string; sent?:
       </div>
       <div className="lg-stage">
         <div className="lg-circle" data-thinking={source === 'thinking'}>
-          <MotifMascot motif={motif} size={150} />
+          <LogMotif mood={MOOD_FOR[motif.face.expression]} thinking={source === 'thinking'} />
         </div>
         <p className="lg-line">{line}</p>
         <p className="lg-sub">{sub}</p>

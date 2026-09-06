@@ -7,18 +7,27 @@
 .lg > .absolute { z-index: 0; }
 .lg-stage { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 
-/* The circle: his motif window, our face in it. */
-.lg-circle { position: relative; width: min(30vmin, 240px); height: min(30vmin, 240px); border-radius: 50%; background: #fff; display: grid; place-items: center;
-  box-shadow: 0 30px 80px rgba(20,22,30,.18); transition: transform .6s cubic-bezier(.22,1,.36,1); }
+/* The motif: his blob, at his size, with the eyes cut through to the sky. No circle — on
+ * /clouds the blob is the body, so a circle here read as a different character. */
+.lg-circle { position: relative; width: min(30vmin, 240px); height: min(30vmin, 240px); display: grid; place-items: center; transition: transform .6s cubic-bezier(.22,1,.36,1); filter: drop-shadow(0 24px 60px rgba(20,22,30,.18)); }
 .lg-circle[data-thinking="true"] { animation: lg-breathe 1.6s ease-in-out infinite; }
 @keyframes lg-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-.lg-circle .motif-mascot { width: 62%; height: 62%; }
-.lg-circle .button-shape { display: none; }          /* the circle IS the body */
-.lg-circle .character-face { width: 100%; height: 100%; color: #172322; }
+.lgm { width: 100%; height: 100%; overflow: visible; }
+.lgm-shape { transition: d 700ms ease; }
+.lgm-brows path { fill: none; stroke: #000; stroke-width: 4.5; stroke-linecap: round; transition: transform 700ms ease, opacity 700ms ease; }
+.lgm-eye { transition: height 700ms ease, y 700ms ease; transform-box: fill-box; transform-origin: center; }
+.lgm-blink { transform-box: fill-box; transform-origin: center; animation: lgm-blink var(--lgm-blink, 5s) ease-in-out infinite; }
+.lgm-gaze { animation: lgm-glance 8s ease-in-out infinite; }
+@keyframes lgm-blink { 0%,40%,46%,100% { transform: scaleY(1); } 43% { transform: scaleY(.1); } }
+@keyframes lgm-glance { 0%,25%,70%,100% { transform: translate(0,0); } 35%,50% { transform: translate(var(--lgm-gaze, 2px),-1px); } 80%,90% { transform: translate(calc(-1 * var(--lgm-gaze, 2px)),0); } }
 
 /* The line under it. Serif like his greeting; the model's read replaces it after Send. */
-.lg-line { margin-top: 26px; max-width: 24ch; text-align: center; font-family: 'Instrument Serif', 'PP Editorial Old', Georgia, serif; font-size: clamp(26px, 3.6vmin, 40px); line-height: 1.12; letter-spacing: -.01em; text-shadow: 0 2px 24px rgba(20,22,30,.25); text-wrap: balance; }
-.lg-sub { margin-top: 10px; max-width: 46ch; text-align: center; font-size: 14px; opacity: .85; text-shadow: 0 1px 12px rgba(20,22,30,.3); }
+/* Dark ink, like the cards: white serif on a Morning sky was the other thing the user could
+ * not read. His page keeps white because his skies run deeper; ours are driven by the day. */
+.lg-line { margin-top: 26px; max-width: 24ch; text-align: center; color: #14151a; font-family: 'Instrument Serif', 'PP Editorial Old', Georgia, serif; font-size: clamp(26px, 3.6vmin, 40px); line-height: 1.12; letter-spacing: -.01em; text-wrap: balance; }
+.lg-sub { margin-top: 10px; max-width: 46ch; text-align: center; font-size: 14px; color: rgba(20,21,26,.72); }
+.lg-status { color: rgba(20,21,26,.6); opacity: 1; }
+.lg-hint { border-color: rgba(255,255,255,.9); background: rgba(255,255,255,.78); color: #14151a; }
 
 /* The pill. */
 .lg-pill { margin-top: 28px; display: flex; align-items: center; width: min(560px, 86vw); border-radius: 999px; background: rgba(255,255,255,.92); box-shadow: 0 16px 40px rgba(20,22,30,.16); padding: 6px 6px 6px 22px; color: #1a1c22; }
@@ -49,16 +58,18 @@
 @keyframes lg-leave { to { opacity: 0; filter: blur(12px); transform: translate(-50%, -50%) rotate(var(--lg-a, 0deg)) translateY(calc(var(--lg-r) * .6)) rotate(calc(-1 * var(--lg-a, 0deg))); } }
 
 .lg-card { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px 10px; border-radius: 18px; min-width: 150px; max-width: 230px; pointer-events: auto;
-  /* a touch more glass than his .14: our sky runs paler (Morning/Midday) and white type on it needs the lift */
-  background: rgba(255,255,255,.22); border: 1px solid rgba(255,255,255,.4); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; text-align: left; text-shadow: 0 1px 10px rgba(20,22,30,.22); }
-.lg-title { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; opacity: .75; }
+  /* His glass is white type on a 14% white wash — on our paler Morning/Midday skies the user
+   * could not read it. Dark ink on a near-white wash instead, the way his inverted page does
+   * it (data-invert), which also matches the white pill below. */
+  background: rgba(255,255,255,.78); border: 1px solid rgba(255,255,255,.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); color: #14151a; text-align: left; box-shadow: 0 10px 30px rgba(20,22,30,.10); }
+.lg-title { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: rgba(20,21,26,.6); }
 .lg-headline { font-size: 22px; font-weight: 500; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .lg-headline.text { font-size: 15px; font-weight: 500; line-height: 1.25; }
-.lg-sub2 { font-size: 11px; opacity: .82; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-sub2 { font-size: 11px; color: rgba(20,21,26,.65); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lg-body { display: contents; }
 .lg-body > * { animation: lg-fade 320ms ease both; }
 @keyframes lg-fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
-.lg-sk { display: block; border-radius: 6px; background: linear-gradient(90deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.38) 50%, rgba(255,255,255,.12) 100%); background-size: 200% 100%; animation: lg-shimmer 1.15s linear infinite; }
+.lg-sk { display: block; border-radius: 6px; background: linear-gradient(90deg, rgba(0,0,0,.06) 0%, rgba(0,0,0,.16) 50%, rgba(0,0,0,.06) 100%); background-size: 200% 100%; animation: lg-shimmer 1.15s linear infinite; }
 .lg-sk-h { width: 72px; height: 22px; margin: 1px 0; }
 .lg-sk-s { width: 132px; height: 11px; margin: 1px 0 2px; }
 @keyframes lg-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
