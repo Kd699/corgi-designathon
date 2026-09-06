@@ -17,6 +17,8 @@
 
 import { useEffect, useRef, type CSSProperties } from "react";
 import type { ReadSegment } from "./clouds-signals";
+import { useVoice } from "./clouds-voice";
+import { WidgetRow } from "./clouds-widgets";
 
 export type MotifMood = "Content" | "Excited" | "Tense" | "Weary" | "Asleep";
 export const MOTIF_MOODS: readonly MotifMood[] = [
@@ -72,17 +74,24 @@ function blobPath(pleasant: number, energy: number): string {
   return `M ${points[0]} L ${points.slice(1).join(" L ")} Z`;
 }
 
-/** The same blob in objectBoundingBox units (0..1) — the clipPath that
+/** The listening shape: a plain circle built from the same 64 points as
+ *  the blob, so the CSS d transition can morph one into the other. */
+function circlePath(): string {
+  const points = Array.from({ length: 64 }, (_, i) => {
+    const angle = (i * Math.PI * 2) / 64;
+    return `${(50 + Math.cos(angle) * 31).toFixed(2)} ${(50 + Math.sin(angle) * 31).toFixed(2)}`;
+  });
+  return `M ${points[0]} L ${points.slice(1).join(" L ")} Z`;
+}
+
+/** A path rescaled to objectBoundingBox units (0..1) — the clipPath that
  *  cuts the inverted-sky div to the character's silhouette. */
-function blobPath01(pleasant: number, energy: number): string {
-  return blobPath(pleasant, energy).replace(
-    /(\d+\.?\d*)/g,
-    (n) => (Number(n) / 100).toFixed(4)
-  );
+function to01(path: string): string {
+  return path.replace(/(\d+\.?\d*)/g, (n) => (Number(n) / 100).toFixed(4));
 }
 
 const CSS = /* css */ `
-.cm-wrap { position: relative; width: min(30vmin, 240px); height: min(30vmin, 240px); }
+.cm-wrap { position: relative; width: min(30vmin, 240px); height: min(30vmin, 240px); pointer-events: auto; cursor: pointer; }
 .cm-motif { position: relative; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .cm-motif .cm-shape { fill: #fff; transition: d 700ms ease; }
 .cm-motif .cm-cutout { color: #000; }
@@ -98,6 +107,10 @@ const CSS = /* css */ `
 .cm-motif[data-tracking="true"] .cm-gaze { animation-play-state: paused; }
 .cm-motif.cm-asleep .cm-blink, .cm-motif.cm-asleep .cm-gaze { animation: none; }
 .cm-motif.cm-asleep .cm-track { transform: none; }
+.cm-motif .cm-face, .cm-motif .cm-vbars { transition: opacity 400ms ease; }
+.cm-motif[data-voice="true"] .cm-face { opacity: 0; }
+.cm-motif:not([data-voice="true"]) .cm-vbars { opacity: 0; }
+.cm-motif .cm-vbar { fill: currentColor; transform-box: fill-box; transform-origin: center; transition: transform 90ms ease-out; }
 @keyframes cm-blink { 0%,40%,46%,100% { transform: scaleY(1); } 43% { transform: scaleY(.1); } }
 @keyframes cm-glance { 0%,25%,70%,100% { transform: translate(0,0); } 35%,50% { transform: translate(var(--cm-gaze-distance),-1px); } 80%,90% { transform: translate(calc(-1 * var(--cm-gaze-distance)),0); } }
 @media (prefers-reduced-motion: reduce) {
@@ -127,7 +140,12 @@ export default function CloudsMotif({
   smile?: boolean;
 }) {
   const face = SPECS[mood] ?? SPECS.Content;
-  const blob = blobPath(face.pleasant, face.energy);
+
+  // Click to talk: the blob morphs into a circle, the face yields to mic
+  // level bars, and the transcript pulls WHOOP widgets out as keywords
+  // land (clouds-voice.ts / clouds-widgets.tsx).
+  const voice = useVoice();
+  const blob = voice.listening ? circlePath() : blobPath(face.pleasant, face.energy);
   const style = {
     "--cm-blink-duration": `${face.blinkSeconds}s`,
     "--cm-gaze-distance": `${face.gazePixels}px`,
@@ -167,7 +185,7 @@ export default function CloudsMotif({
   // One face, two homes: inside the mask (black, cutting sky-holes in the
   // white body) or drawn directly (white ink on the inverted-sky body).
   const faceGroup = (cls: "cm-cutout" | "cm-ink") => (
-    <g className={cls} transform="translate(14 14) scale(0.72)">
+    <g className={`${cls} cm-face`} transform="translate(14 14) scale(0.72)">
       <g className="cm-gaze">
         {/* Brows and eyes ride cm-track together — long round capsules
             (plus their brows) that swivel after the pointer,
@@ -195,10 +213,36 @@ export default function CloudsMotif({
     </g>
   );
 
+  // The listening face: five capsules whose height rides the live mic
+  // level (--cm-level, written by clouds-voice.ts onto the wrap). Same
+  // two homes as the face — cutout in the mask, or white ink.
+  const barsGroup = (cls: "cm-cutout" | "cm-ink") => (
+    <g className={`${cls} cm-vbars`} transform="translate(14 14) scale(0.72)">
+      {[0.5, 1.3, 2.0, 1.3, 0.5].map((factor, i) => (
+        <rect
+          key={i}
+          className="cm-vbar"
+          x={29 + i * 8}
+          y="31"
+          width="6"
+          height="26"
+          rx="3"
+          style={{ transform: `scaleY(calc(0.18 + var(--cm-level, 0) * ${factor}))` }}
+        />
+      ))}
+    </g>
+  );
+
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
       <style>{CSS}</style>
-      <div className="cm-wrap">
+      <div
+        ref={voice.levelHostRef}
+        className="cm-wrap"
+        onClick={voice.toggle}
+        role="button"
+        aria-label={voice.listening ? "Stop listening" : "Start voice"}
+      >
         {/* Inverted mode's body: the sky behind, colour-negated, clipped to
             the blob silhouette. Sits under the svg so the white face reads
             on top of it. */}
@@ -207,13 +251,14 @@ export default function CloudsMotif({
           ref={svgRef}
           className={`cm-motif${face.asleep ? " cm-asleep" : ""}`}
           data-expression={mood}
+          data-voice={voice.listening}
           viewBox="0 0 100 100"
           aria-hidden="true"
           style={style}
         >
           <defs>
             <clipPath id="cm-blob-clip" clipPathUnits="objectBoundingBox">
-              <path d={blobPath01(face.pleasant, face.energy)} />
+              <path d={to01(blob)} />
             </clipPath>
             {/* White keeps, black cuts: the rect keeps the whole blob and
                 the face group (drawn black, at the study's 72%
@@ -223,6 +268,7 @@ export default function CloudsMotif({
               <mask id="cm-motif-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
                 <rect width="100" height="100" fill="#fff" />
                 {faceGroup("cm-cutout")}
+                {barsGroup("cm-cutout")}
               </mask>
             )}
           </defs>
@@ -235,20 +281,36 @@ export default function CloudsMotif({
             />
           )}
           {invert && faceGroup("cm-ink")}
+          {invert && barsGroup("cm-ink")}
         </svg>
       </div>
-      <span className="cm-mood-label">{mood}</span>
-      {summary && (
+      <span className="cm-mood-label">{voice.listening ? "Listening" : mood}</span>
+      {voice.listening ? (
         <p className="cm-read">
-          {summary.map((seg, i) =>
-            typeof seg === "string" ? (
-              <span key={i}>{seg}</span>
-            ) : (
-              <span key={i} className="cm-pill">{seg.pill}</span>
-            )
+          {voice.transcript ? (
+            <span>{voice.transcript}</span>
+          ) : (
+            <span style={{ opacity: 0.65, fontStyle: "italic" }}>
+              {voice.supported
+                ? "talk about your sleep, recovery or strain\u2026"
+                : "speech recognition isn't available in this browser"}
+            </span>
           )}
         </p>
+      ) : (
+        summary && (
+          <p className="cm-read">
+            {summary.map((seg, i) =>
+              typeof seg === "string" ? (
+                <span key={i}>{seg}</span>
+              ) : (
+                <span key={i} className="cm-pill">{seg.pill}</span>
+              )
+            )}
+          </p>
+        )
       )}
+      <WidgetRow kinds={voice.widgets} />
     </div>
   );
 }
