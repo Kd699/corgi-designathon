@@ -488,7 +488,16 @@ export default function CloudsScene() {
           <Scene dials={values} />
         </Canvas>
       )}
-      <CloudsMotif mood={values.mood} summary={readForSky(values.sky).summary} sky={values.sky} invert={values.invert} smile={values.smile} />
+      <CloudsMotif
+        mood={values.mood}
+        summary={readForSky(values.sky).summary}
+        sky={values.sky}
+        invert={values.invert}
+        smile={values.smile}
+        // Spoken emotion themes steer the sky dial itself, so the scene
+        // transition, the mood select and the summary all follow.
+        onTheme={(sky) => setValue("sky", sky)}
+      />
       <DialRoot position="top-right" theme="dark" productionEnabled />
     </div>
   );

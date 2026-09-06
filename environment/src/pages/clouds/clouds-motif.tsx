@@ -19,7 +19,7 @@ import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import type { ReadSegment } from "./clouds-signals";
 import { cssPaletteFor, type SkyPresetName } from "./sky";
 import { useVoice } from "./clouds-voice";
-import { WidgetRow } from "./clouds-widgets";
+import { WidgetArc } from "./clouds-widgets";
 
 export type MotifMood = "Content" | "Excited" | "Tense" | "Weary" | "Asleep";
 export const MOTIF_MOODS: readonly MotifMood[] = [
@@ -138,6 +138,7 @@ export default function CloudsMotif({
   sky = "Midday",
   invert = false,
   smile = false,
+  onTheme,
 }: {
   mood: MotifMood;
   /** The read behind the mood (clouds-signals.ts) — signal citations
@@ -151,13 +152,15 @@ export default function CloudsMotif({
   invert?: boolean;
   /** The mouth is off the face for now — this dial brings it back. */
   smile?: boolean;
+  /** Fired when a spoken emotion theme should recolour the sky. */
+  onTheme?: (sky: SkyPresetName) => void;
 }) {
   const face = SPECS[mood] ?? SPECS.Content;
 
   // Click to talk: the blob morphs into a circle, the face yields to mic
   // level bars, and the transcript pulls WHOOP widgets out as keywords
   // land (clouds-voice.ts / clouds-widgets.tsx).
-  const voice = useVoice();
+  const voice = useVoice({ onTheme });
   // Voice always speaks on the white page: listening forces the inverted
   // layout — sky masked into the shape — whatever the dial says.
   const inverted = invert || voice.listening;
@@ -321,6 +324,9 @@ export default function CloudsMotif({
             d={blob}
           />
         </svg>
+        {/* The WHOOP cards sweep out from behind the circle along an arc
+            as their keywords land, blurring in on the way. */}
+        <WidgetArc kinds={voice.widgets} />
       </div>
       <span className="cm-mood-label">{voice.listening ? "Listening" : mood}</span>
       {voice.listening && !hasStream && (
@@ -355,7 +361,6 @@ export default function CloudsMotif({
           )}
         </p>
       )}
-      <WidgetRow kinds={voice.widgets} />
     </div>
   );
 }

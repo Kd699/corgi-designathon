@@ -8,6 +8,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getAudioContext, playVoiceStart, playVoiceEnd, playWidgetAppear } from "./clouds-sounds";
 import { WIDGET_TRIGGERS, type WidgetKind } from "./clouds-widgets";
+import type { SkyPresetName } from "./sky";
+
+// Emotional weather: the themes you speak steer the sky. The MOST RECENT
+// emotion word in the transcript wins, so the sky follows the story as it
+// turns — happy opens a clear midday blue, anxious broods into dusk, sad
+// settles into night, calm eases into sunset.
+const THEME_SKIES: { theme: string; sky: SkyPresetName; rx: RegExp }[] = [
+  { theme: "happy", sky: "Midday", rx: /\b(happy|happiness|glad|joy|joyful|great|amazing|wonderful|excited|exciting|fantastic|love|loved)\b/gi },
+  { theme: "anxious", sky: "Dusk", rx: /\b(anxious|anxiety|stress|stressed|nervous|worried|worry|worrying|tense|overwhelmed|panic|panicking|scared)\b/gi },
+  { theme: "sad", sky: "Night", rx: /\b(sad|sadness|unhappy|depressed|depressing|down|lonely|upset|miserable|crying|cried|grief)\b/gi },
+  { theme: "calm", sky: "Sunset", rx: /\b(calm|calmer|relaxed|relaxing|peaceful|serene|settled|chill|chilled)\b/gi },
+];
 
 // Chrome ships this prefixed and the DOM lib omits it entirely.
 type SRResult = ArrayLike<{ transcript: string }> & { isFinal: boolean };
@@ -27,7 +39,7 @@ function makeRecognition(): SpeechRecognitionLike | null {
   return Ctor ? new Ctor() : null;
 }
 
-export function useVoice() {
+export function useVoice({ onTheme }: { onTheme?: (sky: SkyPresetName) => void } = {}) {
   const [listening, setListening] = useState(false);
   /** Finalised utterances, one bubble each. */
   const [chunks, setChunks] = useState<string[]>([]);
@@ -43,6 +55,9 @@ export function useVoice() {
   /** Where --cm-level lands: the motif wrap, so the bars can read it. */
   const levelHostRef = useRef<HTMLDivElement | null>(null);
   const matchedRef = useRef<Set<WidgetKind>>(new Set());
+  const themeRef = useRef<string | null>(null);
+  const onThemeRef = useRef(onTheme);
+  onThemeRef.current = onTheme;
 
   const stopInternals = useCallback(() => {
     recRef.current?.stop();
@@ -60,6 +75,7 @@ export function useVoice() {
     setInterim("");
     setWidgets([]);
     matchedRef.current = new Set();
+    themeRef.current = null;
     playVoiceStart();
 
     const rec = makeRecognition();
@@ -89,6 +105,19 @@ export function useVoice() {
             setWidgets((prev) => [...prev, kind]);
             playWidgetAppear();
           }
+        }
+        // The latest emotion word in the whole transcript sets the sky.
+        let best: { theme: string; sky: SkyPresetName; at: number } | null = null;
+        for (const t of THEME_SKIES) {
+          t.rx.lastIndex = 0;
+          let m: RegExpExecArray | null;
+          let last = -1;
+          while ((m = t.rx.exec(all))) last = m.index;
+          if (last >= 0 && (!best || last > best.at)) best = { theme: t.theme, sky: t.sky, at: last };
+        }
+        if (best && best.theme !== themeRef.current) {
+          themeRef.current = best.theme;
+          onThemeRef.current?.(best.sky);
         }
       };
       // Chrome ends recognition after a stretch of silence; while the
