@@ -288,7 +288,7 @@ export function MorphBoard({ seed = '', phase = 'blank' }: { seed?: string; phas
   const handlers = { onPointerMove: move, onPointerUp: finish, onPointerCancel: () => { drag.current = null; setCandidate(null); } };
 
   const status =
-    source === 'thinking' ? 'Grok is reading it…'
+    source === 'thinking' ? 'Grok is reading it… usually 5–10s'
     : source === 'model' ? 'Composed by Grok'
     : source === 'local' ? 'Local read — Send for the model'
     : 'Widgets fill in as you write';
@@ -346,7 +346,15 @@ export function MorphBoard({ seed = '', phase = 'blank' }: { seed?: string; phas
               )}
 
               <section className="mb-editor" style={{ left: BASE.x, top: BASE.y, width: BASE.w, height: BASE.h }}>
-                <div className="mb-doc-title"><span>Today</span><span>SPACETIME · DAYBOARD</span></div>
+                <div className="mb-doc-title">
+                  <span>Today</span>
+                  {/* Pre-canned days, so a test send is one click. Same three accounts D1 uses. */}
+                  <span className="mb-examples">
+                    {PROMPTS.map((pr, i) => (
+                      <button key={i} type="button" className="mb-example" onClick={() => setText(pr)}>Example {i + 1}</button>
+                    ))}
+                  </span>
+                </div>
                 <textarea
                   aria-label="Your day"
                   spellCheck={false}

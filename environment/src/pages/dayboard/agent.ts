@@ -250,12 +250,24 @@ const endpoint: { url: string; headers: Record<string, string> } = PROXY_URL && 
   ? { url: PROXY_URL, headers: { 'content-type': 'application/json', authorization: `Bearer ${PROXY_TOKEN}`, apikey: PROXY_TOKEN } }
   : { url: '/api/xai', headers: { 'content-type': 'application/json' } };
 
+/* grok-4-fast-non-reasoning, not grok-4-latest: through the edge function the reasoning
+ * model took 12–18s for this prompt and the non-reasoning one ~6s, with no visible drop in
+ * the composition. And a hard ceiling — a request that has not answered in THINK_TIMEOUT_MS
+ * is abandoned and the caller falls back to the local read, because "Grok is reading…"
+ * forever is the one state the board must never sit in. */
+const MODEL = 'grok-4-fast-non-reasoning';
+const THINK_TIMEOUT_MS = 20_000;
+
 export async function think(text: string, base: DayState): Promise<AgentReply> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), THINK_TIMEOUT_MS);
   const res = await fetch(endpoint.url, {
     method: 'POST',
     headers: endpoint.headers,
+    signal: ctl.signal,
     body: JSON.stringify({
-      model: 'grok-4-latest',
+      model: MODEL,
+      max_tokens: 1200,
       temperature: 0.4,
       response_format: { type: 'json_object' },
       messages: [
@@ -263,7 +275,9 @@ export async function think(text: string, base: DayState): Promise<AgentReply> {
         { role: 'user', content: `Board so far:\n${JSON.stringify(base)}\n\nThey said:\n${text}` },
       ],
     }),
-  });
+  }).catch((e: unknown) => {
+    throw new Error(ctl.signal.aborted ? `no answer in ${THINK_TIMEOUT_MS / 1000}s` : e instanceof Error ? e.message : String(e));
+  }).finally(() => clearTimeout(timer));
   if (!res.ok) throw new Error(`xai ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const json = await res.json();
   const content: string | undefined = json?.choices?.[0]?.message?.content;

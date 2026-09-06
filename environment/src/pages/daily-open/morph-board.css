@@ -51,7 +51,9 @@
 .mb-doc-title,.mb-doc-footer{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#7a8965}
 .mb-doc-title{padding-bottom:14px;border-bottom:1px solid #b9c99f}
 .mb-doc-title span:first-child{color:#52663d;font-size:12px}
-.mb-doc-title span:last-child{font-size:8px;letter-spacing:1px}
+.mb-examples{display:flex;gap:6px}
+.mb-example{border:1px solid #c9d6b4;background:#fff;border-radius:12px;padding:3px 9px;font-size:10px!important;color:#5d7148}
+.mb-example:hover{background:#edf2e1}
 .mb-editor textarea{resize:none;flex:1;min-height:0;width:100%;border:0;background:transparent;color:#394d2a;padding:14px 0;outline:none;font-size:15px;line-height:1.6}
 .mb-editor textarea::placeholder{color:#93a084}
 .mb-doc-footer{padding-top:10px;border-top:1px solid #bdcea1;gap:10px}

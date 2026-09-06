@@ -79,7 +79,7 @@ export default function DayboardPage({ seed, frozen }: { seed?: string; frozen?:
   const panels = useMemo(() => surface.filter((id) => WIDGETS[id]), [surface]);
 
   const status =
-    source === 'thinking' ? 'Grok is reading it…'
+    source === 'thinking' ? 'Grok is reading it… usually 5–10s'
     : source === 'model' ? 'Composed by Grok'
     : source === 'local' ? 'Local read — press send for the model'
     : 'Nothing yet';
