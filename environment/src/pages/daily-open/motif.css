@@ -1,0 +1,38 @@
+/* Only the character rules from motif+signal_simulation/src/index.css (commit 8625713) —
+ * the shape, its motion, and the ink face. The simulator chrome, the three-up canvas grid
+ * and the sound toggle are not carried over; the week screen wants one mascot, not a studio.
+ */
+
+.motif-mascot { pointer-events: none; }
+.motif-mascot .button-motion { width: 100%; height: 100%; animation-duration: var(--button-duration); animation-iteration-count: infinite; animation-timing-function: ease-in-out; }
+.motif-mascot .study-button { display: grid; place-items: center; position: relative; width: 100%; height: 100%; isolation: isolate; }
+.motif-mascot .button-shape { position: absolute; inset: 0; z-index: -1; transition: clip-path var(--shape-transition) cubic-bezier(.22,.8,.25,1), background var(--shape-transition) ease; }
+
+.motion-float { animation-name: study-float; }
+.motion-bounce { animation-name: study-bounce; }
+.motion-tremble { animation-name: study-tremble; }
+.motion-press { animation-name: study-press; }
+.motion-still { animation: none; }
+@keyframes study-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(calc(-1 * var(--button-amplitude))); } }
+@keyframes study-bounce { 0%,100% { transform: translateY(0) scale(1.02,.98); } 50% { transform: translateY(calc(-1 * var(--button-amplitude))) scale(.98,1.02); } }
+@keyframes study-tremble { 0%,100% { transform: rotate(-2deg) translateX(-2px); } 33% { transform: rotate(2deg) translateX(2px); } 66% { transform: rotate(-1deg); } }
+@keyframes study-press { 0%,100% { transform: scale(1); } 50% { transform: scale(.96,.98); } }
+
+/* Minimal ink faces: each character blinks and glances on its own rhythm. */
+.character-face { width: 72%; height: 72%; overflow: visible; pointer-events: none; color: #172322; }
+.face-eye { fill: currentColor; transition: height var(--shape-transition) ease, y var(--shape-transition) ease; transform-box: fill-box; transform-origin: center; }
+.face-mouth, .face-brows path { fill: none; stroke: currentColor; stroke-width: 4.5; stroke-linecap: round; }
+.face-mouth { transition: d var(--shape-transition) ease; }
+.face-brows, .face-brows path, .face-eye-tilt { transition: opacity var(--shape-transition) ease, transform var(--shape-transition) ease; }
+.face-blink { transform-box: fill-box; transform-origin: center; animation: character-blink var(--blink-duration) ease-in-out infinite; animation-delay: var(--face-delay); }
+.face-gaze { animation: character-glance 8s ease-in-out infinite; animation-delay: var(--face-delay); }
+.face-asleep .face-blink, .face-asleep .face-gaze { animation: none; }
+@keyframes character-blink { 0%,40%,46%,100% { transform: scaleY(1); } 43% { transform: scaleY(.1); } }
+@keyframes character-glance { 0%,25%,70%,100% { transform: translate(0,0); } 35%,50% { transform: translate(var(--gaze-distance),-1px); } 80%,90% { transform: translate(calc(-1 * var(--gaze-distance)),0); } }
+@media (prefers-reduced-motion: reduce) { .motif-mascot .button-motion { animation: none; } .motif-mascot .button-shape { transition: none; } .face-blink, .face-gaze { animation: none; } }
+
+/* The sky canvas measures itself once, and inside the artboard's scaled desktop frame it
+ * lands ~90px short of the right edge — leaving a white strip beside a full-bleed sky.
+ * Forcing the element box to fill its host costs a hair of stretch in the drawing buffer,
+ * which on a procedural sky is invisible and on a white gap is not. */
+.week-sky-stage canvas { display: block; width: 100% !important; height: 100% !important; }

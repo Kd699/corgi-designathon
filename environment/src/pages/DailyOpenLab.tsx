@@ -21,6 +21,7 @@ import { DAILY_OPEN_COMPONENTS } from './daily-open/component-focus'
 import { SCENARIOS } from './daily-open/scenarios'
 import { WEEK_MODES, WEEK_CONCEPTS, WEEK_CONCEPT_CONFIG } from './daily-open/week-in-review'
 import { WEEK_VIEWS } from './daily-open/week'
+import { WEEK_SKY_MODE, WEEK_SKY_ID, WEEK_SKY_CONFIG } from './daily-open/week-stage-sky'
 import { STANDARD_WELCOME_HELP } from './_shared/v3artboard-welcome-help'
 
 const mobile = 'mobile' as const
@@ -39,7 +40,7 @@ const SPEC = defineV3ArtboardSpec({
       { kbd: 'Components', text: 'The third tab renders each real component on its own, against every scenario palette.' },
     ],
   },
-  modes: [...DAILY_OPEN_MODES, ...WEEK_MODES],
+  modes: [...DAILY_OPEN_MODES, ...WEEK_MODES, WEEK_SKY_MODE],
   componentFocus: DAILY_OPEN_COMPONENTS,
   componentFocusLayout: 'detail',
   defaults: { viewMode: 'artboard', platform: mobile, zoom: 0.5, frameHeight: 'auto' },
@@ -90,7 +91,7 @@ const SPEC = defineV3ArtboardSpec({
     // sixteen frames.
     {
       sectionLabel: 'Week in review (desktop)',
-      items: WEEK_CONCEPTS.map((id) => ({
+      items: [...WEEK_CONCEPTS.map((id) => ({
         id: `week-${id}`,
         label: WEEK_CONCEPT_CONFIG[id].label,
         description: WEEK_CONCEPT_CONFIG[id].thesis,
@@ -105,6 +106,23 @@ const SPEC = defineV3ArtboardSpec({
           })),
         },
       })),
+      // The fork of W1 carrying the team's own work: /clouds' Wisps sky and the motif
+      // character. Listed beside its parent so the two are one click apart.
+      {
+        id: `week-${WEEK_SKY_ID}`,
+        label: WEEK_SKY_CONFIG.label,
+        description: WEEK_SKY_CONFIG.thesis,
+        options: [{ modeId: WEEK_SKY_ID, stateId: WEEK_VIEWS[0].id, platform: web, platformLabel: 'D' }],
+        subgroup: {
+          label: 'Cards',
+          items: WEEK_VIEWS.map((v) => ({
+            id: `week-${WEEK_SKY_ID}-${v.id}`,
+            label: v.label,
+            description: v.headline,
+            options: [{ modeId: WEEK_SKY_ID, stateId: v.id, platform: web, platformLabel: 'D' }],
+          })),
+        },
+      }],
     },
   ],
 
@@ -129,6 +147,23 @@ const SPEC = defineV3ArtboardSpec({
         frames: [{ modeId: id, stateId: v.id, platform: web, rawFrame: true, fitHeight: true }],
       })),
     })),
+    // The fork, given its own row directly under its parent so W1 and W1b read as a
+    // before/after rather than two entries in a list.
+    {
+      id: `week-${WEEK_SKY_ID}`,
+      divider: 'thick' as const,
+      flowBadge: { label: 'Week in review · fork' },
+      title: WEEK_SKY_CONFIG.label,
+      description: `${WEEK_SKY_CONFIG.thesis} ${WEEK_SKY_CONFIG.risk}`,
+      steps: WEEK_VIEWS.map((v, i) => ({
+        badge: i + 1,
+        title: v.label,
+        description: v.headline,
+        maxWidth: 420,
+        arrowAfter: true as const,
+        frames: [{ modeId: WEEK_SKY_ID, stateId: v.id, platform: web, rawFrame: true, fitHeight: true }],
+      })),
+    },
     // Rows are moments so the four directions sit side by side under identical signals.
     // Only the first row carries each thesis — repeating it under all sixteen frames is noise.
     ...SCENARIOS.map((s, row) => ({

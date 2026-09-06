@@ -116,8 +116,9 @@ const FIGURE: Record<WeekView['figure'], (v: WeekView) => ReactNode> = {
   none: () => null,
 };
 
-/** The card itself — identical in all three concepts, so the comparison is about placement. */
-function Card({ view, spec, solid }: { view: WeekView; spec: EnvSpec; solid?: boolean }) {
+/** The card itself — identical in every concept (W1b's sky fork imports it too), so the
+ *  comparison stays about placement rather than content. */
+export function Card({ view, spec, solid }: { view: WeekView; spec: EnvSpec; solid?: boolean }) {
   return (
     <article
       className="flex w-full flex-col gap-5 rounded-2xl p-7"
@@ -136,7 +137,7 @@ function Card({ view, spec, solid }: { view: WeekView; spec: EnvSpec; solid?: bo
 }
 
 /** Paging: arrows, dots, and Play. The only interactive part of the week screen. */
-function Pager({ i, setI, playing, setPlaying }: { i: number; setI: (n: number) => void; playing: boolean; setPlaying: (b: boolean) => void }) {
+export function Pager({ i, setI, playing, setPlaying }: { i: number; setI: (n: number) => void; playing: boolean; setPlaying: (b: boolean) => void }) {
   const n = WEEK_VIEWS.length;
   const btn = 'rounded-full border px-3 py-1.5 text-sm transition';
   return (
@@ -239,7 +240,7 @@ function WeekScreen({ conceptId, stateId, live }: { conceptId: WeekConceptId; st
   return LAYOUT[conceptId]({ view, spec, pager }) as JSX.Element;
 }
 
-const WEEK_STATES: StateConfig[] = WEEK_VIEWS.map((v) => ({ id: v.id, label: v.label, description: v.headline }));
+export const WEEK_STATES: StateConfig[] = WEEK_VIEWS.map((v) => ({ id: v.id, label: v.label, description: v.headline }));
 
 function buildWeekMode(id: WeekConceptId): ScreenMode {
   const cfg = WEEK_CONCEPT_CONFIG[id];
