@@ -80,6 +80,8 @@ import { DialRoot, useDialKitController, type DialConfig } from "dialkit";
 import "dialkit/styles.css";
 import WispsCanvas from "./clouds-wisps";
 import CloudsMotif, { MOTIF_MOODS } from "./clouds-motif";
+import SessionHistory, { loadHistory, saveHistory, type HistoryItem } from "./clouds-history";
+import type { SessionRead } from "./clouds-session";
 import { moodForSky, readForSky } from "./clouds-signals";
 import {
   SKY_PRESETS,
@@ -420,6 +422,12 @@ export default function CloudsScene() {
       invert: false,
       // The mouth is parked for now — flip this to bring the smile back.
       smile: false,
+      experimental: {
+        _collapsed: true,
+        // Invert ↔ sky as a circle growing from the motif (clouds-motif.tsx)
+        // instead of the default crossfade.
+        circleReveal: false,
+      },
       speed: [2, 0, 10, 0.1],
       fullness: [0.35, 0, 1, 0.01],
       intensity: [0.5, 0, 1, 0.01],
@@ -456,6 +464,41 @@ export default function CloudsScene() {
   );
   const values = dial.values as unknown as CloudDials;
 
+  // THE SESSION READ. When a voice (or typed) session ends, the motif hands
+  // up what clouds-session.ts made of it; the scene owns it because the
+  // read sets the MOOD DIAL — the face morphs to what it heard — and shows
+  // where it landed. Every read also joins the history under the sky.
+  const [session, setSession] = useState<SessionRead | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>(() => loadHistory());
+  const skyRef = useRef(values.sky);
+  skyRef.current = values.sky;
+  const onSession = (read: SessionRead | null) => {
+    setSession(read);
+    if (!read) return;
+    setValue("mood", read.mood);
+    setHistory((prev) => {
+      // skyRef, not values.sky: the sky the session ENDED on, after any
+      // spoken theme moved it, not the one this handler was created under.
+      const next = [...prev, { ...read, at: new Date().toISOString(), sky: skyRef.current }];
+      saveHistory(next);
+      return next;
+    });
+  };
+
+  // Scrolling into the history fades the motif — shape, greeting, read —
+  // while the sky (a fixed canvas) stays exactly where it is. One CSS var,
+  // written on scroll, read by .cm-stage.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onScroll = () => {
+      const fade = Math.max(0, 1 - window.scrollY / (window.innerHeight * 0.45));
+      rootRef.current?.style.setProperty("--cm-fade", fade.toFixed(3));
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   // Selecting a sky swings the heading dial to that sky's postcard
   // direction (Live: the nearer stop's), and DERIVES the motif's mood from
   // that hour's signals (clouds-signals.ts — the signal simulation's own
@@ -468,7 +511,21 @@ export default function CloudsScene() {
       values.sky === "Live" ? liveSky().heading : SKY_PRESETS[values.sky].heading;
     setValue("view.heading", heading);
     setValue("mood", moodForSky(values.sky));
+    // A new sky is a new read: the last session's heading steps aside.
+    setSession(null);
   }, [values.sky, setValue]);
+
+  // Landing with sessions already logged today: wear the last one's mood
+  // (after the sky effect above, so it wins on mount).
+  useEffect(() => {
+    const last = history[history.length - 1];
+    if (last && new Date(last.at).toDateString() === new Date().toDateString()) setValue("mood", last.mood);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // While the voice session is live (listening or thinking) the history
+  // list unmounts — reported up by the motif, which owns the mic.
+  const [voiceLive, setVoiceLive] = useState(false);
 
   // "d" hides the whole DialKit dock (the floating circle included) for a
   // clean frame. display:none rather than unmount, so the panel keeps its
@@ -486,7 +543,10 @@ export default function CloudsScene() {
   }, []);
 
   return (
-    <div className="relative h-[100dvh] w-full bg-black">
+    <div ref={rootRef} className="relative min-h-[100dvh] w-full bg-black">
+      {/* The sky is FIXED: the page scrolls (motif, then the session
+          history) and the canvas never moves under it. */}
+      <div className="fixed inset-0">
       {/* Keyed swap, not co-mounting: the engines are separate WebGL
           contexts, and only the dialled one should own a context at all —
           that lightness is the wisps engine's whole reason to exist. */}
@@ -503,6 +563,7 @@ export default function CloudsScene() {
           <Scene dials={values} />
         </Canvas>
       )}
+      </div>
       <CloudsMotif
         mood={values.mood}
         summary={readForSky(values.sky).summary}
@@ -512,7 +573,15 @@ export default function CloudsScene() {
         // Spoken emotion themes steer the sky dial itself, so the scene
         // transition, the mood select and the summary all follow.
         onTheme={(sky) => setValue("sky", sky)}
+        circleReveal={values.experimental?.circleReveal ?? false}
+        session={session}
+        onSession={onSession}
+        neutral={history.length === 0 && !session}
+        onLive={setVoiceLive}
       />
+      {/* The history steps aside while a voice session is live — the
+          white page belongs to the tracker and its stream. */}
+      {!voiceLive && <SessionHistory items={history} inverted={values.invert} />}
       <div style={{ display: dialsVisible ? undefined : "none" }}>
         <DialRoot position="top-right" theme="dark" productionEnabled />
       </div>

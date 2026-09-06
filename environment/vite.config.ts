@@ -56,10 +56,56 @@ function xaiProxy(env: Record<string, string>): Plugin {
   };
 }
 
+/* The OpenAI seam — the same shape as the xAI one, for /clouds.
+ *
+ * When a voice session ends, clouds-session.ts POSTs the transcript here and the dev server
+ * forwards it to chat/completions with OPENAI_API_KEY from environment/.env.local (gitignored;
+ * the key came from another project's env and is never committed here). GET answers whether a
+ * key is configured, so the page can say up front which read you will get. 503 with no key —
+ * the page falls back to its local keyword read and labels it as such.
+ */
+function openaiProxy(env: Record<string, string>): Plugin {
+  return {
+    name: 'openai-proxy',
+    configureServer(server) {
+      server.middlewares.use('/api/openai', async (req, res) => {
+        const key = env.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+        const model = env.OPENAI_MODEL || process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+        const send = (code: number, body: unknown) => {
+          res.statusCode = code;
+          res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify(body));
+        };
+        if (req.method === 'GET') return send(200, { configured: Boolean(key), model });
+        if (req.method !== 'POST') return send(405, { error: 'POST only' });
+        if (!key) return send(503, { error: 'OPENAI_API_KEY is not set — add it to environment/.env.local and restart' });
+
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+        try {
+          // Fill in the model server-side so the client never names one.
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+          if (!body.model) body.model = model;
+          const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+            body: JSON.stringify(body),
+          });
+          res.statusCode = upstream.status;
+          res.setHeader('content-type', 'application/json');
+          res.end(await upstream.text());
+        } catch (e) {
+          send(502, { error: e instanceof Error ? e.message : String(e) });
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
-    plugins: [react(), xaiProxy(env)],
+    plugins: [react(), xaiProxy(env), openaiProxy(env)],
     // The V3Artboard runtime imports its dev-mode helpers as '@/…', the way it does in the
     // project it came from. Keeping the alias means the runtime can be re-copied verbatim.
     resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },

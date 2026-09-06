@@ -277,14 +277,19 @@ export function useVoice({ onTheme, onEnd, onStart }: VoiceOptions = {}) {
         const host = levelHostRef.current;
         if (host) {
           host.style.setProperty("--cm-level", level.toFixed(3));
-          for (let b = 0; b < 5; b++) {
-            const [lo, hi] = bins[b];
+          // Each band RELATIVE to the loudest band this frame, then scaled
+          // by the overall level: the bars show the SHAPE of the sound (a
+          // vowel's low weight, an "s" lifting the edges) at any volume,
+          // instead of all five pinning together when the mic runs hot.
+          const energies = bins.map(([lo, hi], b) => {
             let acc = 0;
             for (let i = lo; i <= hi; i++) acc += freq[i];
-            const energy = (acc / Math.max(1, hi - lo + 1) / 255) * BAND_LIFT[b];
-            // Band energy rides the same gate/gain as the level, so silence
-            // is flat and speech fills the range.
-            const t = gated === 0 ? 0 : Math.min(1, energy * energy * 2.6 * (0.6 + target * 0.8));
+            return (acc / Math.max(1, hi - lo + 1) / 255) * BAND_LIFT[b];
+          });
+          const loudest = Math.max(0.02, ...energies);
+          for (let b = 0; b < 5; b++) {
+            const shape = Math.pow(energies[b] / loudest, 1.4);
+            const t = gated === 0 ? 0 : Math.min(1, shape * (0.3 + target * 0.75));
             shown[b] = t > shown[b] ? t : shown[b] * 0.78;
             host.style.setProperty(`--cm-b${b}`, shown[b].toFixed(3));
           }
