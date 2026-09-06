@@ -53,6 +53,24 @@ const CSS = /* css */ `
 /* On the inverted (white) page the title outside the cards goes dark too. */
 .ch[data-invert="true"] { color: #111; }
 .ch[data-invert="true"] .ch-card { border-color: rgba(0,0,0,0.14); }
+/* Leaving through the top: each card rides its own view() timeline, so as
+   it climbs into the top ~18% of the viewport it progressively blurs,
+   thins and lifts away — a per-card progressive blur, no scroll listener.
+   The title and cards share the treatment; browsers without scroll-driven
+   animations just scroll them off plain. */
+@supports (animation-timeline: view()) {
+  .ch-card, .ch-title {
+    animation: ch-away linear both;
+    animation-timeline: view(block 18% 0%);
+    animation-range: exit 0% exit 90%;
+  }
+  @keyframes ch-away {
+    to { opacity: 0; filter: blur(14px); transform: translateY(-14px) scale(0.97); }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ch-card, .ch-title { animation: none; }
+}
 `;
 
 export default function SessionHistory({ items, inverted }: { items: HistoryItem[]; inverted: boolean }) {
