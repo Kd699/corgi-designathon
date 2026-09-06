@@ -360,7 +360,7 @@ export default function CloudsMotif({
             {!voice.supported
               ? "speech recognition isn't available in this browser"
               : voice.ready
-                ? "go ahead — sleep, recovery, strain, or how you feel\u2026"
+                ? "go ahead: sleep, recovery, strain, or how you feel\u2026"
                 : "connecting\u2026"}
           </span>
         </p>
