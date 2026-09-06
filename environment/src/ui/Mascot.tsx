@@ -24,7 +24,7 @@ export default function Mascot({ spec }: { spec: EnvSpec }) {
         <path d={`M20 ${22 + e.brow} q7 -4 14 0`} stroke={spec.palette.ink} strokeWidth="2" fill="none" strokeLinecap="round" />
         <path d={`M38 ${22 + e.brow} q7 -4 14 0`} stroke={spec.palette.ink} strokeWidth="2" fill="none" strokeLinecap="round" />
       </svg>
-      <p className="max-w-[16ch] text-sm leading-snug opacity-80">{line}</p>
+      {line && <p className="max-w-[16ch] text-sm leading-snug opacity-80">{line}</p>}
     </div>
   );
 }

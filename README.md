@@ -78,7 +78,36 @@ Open questions are in `docs/BRIEF.md`. The big one: which real-world signals sho
 allowed to change the environment without the user saying anything, and where is the
 line between responsive and creepy?
 
+## The artboard
+
+```
+cd environment && npm run dev
+open http://localhost:5300/#/artboard
+```
+
+`environment/src/artboard/` is a design board for **the daily open** - the screen you land on when
+the environment already knows you. Rows are scenarios, columns are four directions spread along one
+axis: *how loud is the environment's read?*
+
+| | |
+|---|---|
+| A · Weather | Never states the read. Atmosphere, mascot posture and which components exist are the whole message. |
+| B · The read, stated | Leads with the guess and its evidence, correction directly underneath. |
+| C · Mascot as narrator | The mascot carries the read and asks rather than asserts. |
+| D · Quiet read | B's spine with C's manners. The recommendation. |
+
+Every frame runs the real `derive()` and the real components - the board cannot show something the
+product would not do. Grid cells are static so a frame stays on the scenario it claims; click any
+frame to open it live with the Signals panel attached.
+
+Adding a fifth direction is one entry in `concepts.tsx`; adding a scenario is one entry in
+`presets.ts`. Neither touches a renderer.
+
+Two fields exist on `EnvSpec` for this board: `read` (the guess with its evidence named, so a wrong
+read is arguable rather than mysterious) and `ask` (the correction phrased as a question). Both are
+computed in `derive()`, because a concept that decided its own wording would stop being a projection.
+
 ## Screenshots
 
-In `docs/`: the budget app, and the environment in three states (steady, low mood,
-high heart rate on Focus).
+In `docs/`: the budget app, the environment in three states (steady, low mood, high heart rate on
+Focus), and `shot-artboard-daily-open.png` - the whole daily-open board.

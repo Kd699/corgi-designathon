@@ -23,6 +23,10 @@ export interface EnvSpec {
   components: Component[];
   /** One sentence the environment says about itself. Makes the reaction legible. */
   headline: string;
+  /** The read, with its evidence named. Longer than headline: says WHY it thinks this. */
+  read: string;
+  /** The correction, phrased as something the mascot asks rather than a rating the system demands. */
+  ask: string;
   /** Why it looks like this. Shown in the Signals panel so teammates can tune the rules. */
   reasons: string[];
 }
@@ -99,6 +103,28 @@ function componentsFor(objective: Objective, arousal: number, valence: number, r
   }
 }
 
+/** The read: one sentence that names the evidence, so a wrong read is arguable rather than mysterious. */
+function readSentence(s: Signals, valence: number, arousal: number, state: MascotState): string {
+  const mood = s.mood === null ? null : `${s.mood}/5`;
+  const night = s.hour >= 21 || s.hour < 6;
+  if (state === 'asleep') return 'You have been still a while. Nothing moved while you were gone.';
+  if (arousal > 0.7 && valence < 0) return `Heart at ${s.heartRate} and you have been moving. This does not look like the good kind of busy.`;
+  if (arousal > 0.7) return `Heart at ${s.heartRate}. You are running hot and it seems to be working.`;
+  if (valence > 0.3) return mood ? `You put yourself at ${mood} and nothing since has argued with it.` : 'Your signals are pointing up and nothing is contradicting them.';
+  if (valence < -0.3) return mood ? `You put yourself at ${mood}. Heart is only ${s.heartRate}, so it is not your body.` : `Something is reading low. Heart is only ${s.heartRate}, so it is not your body.`;
+  if (arousal < 0.25) return night ? `Late, and your pulse has dropped to ${s.heartRate}. The day is over whether or not you agree.` : `Low tide. Heart at ${s.heartRate}, barely moving.`;
+  return `Heart at ${s.heartRate}, ordinary hour, nothing standing out.`;
+}
+
+/** Correction as a question. Same lever as thumbs up/down, asked instead of demanded. */
+const ASK: Record<MascotState, string> = {
+  asleep: 'still there?',
+  frazzled: 'want to slow this down?',
+  alert: 'ride it, or rein it in?',
+  curious: 'want something new?',
+  calm: 'have I got you right?',
+};
+
 export function derive(s: Signals): EnvSpec {
   const reasons: string[] = [];
   const arousal = deriveArousal(s, reasons);
@@ -119,6 +145,8 @@ export function derive(s: Signals): EnvSpec {
     mascot: m,
     components: [...components, 'signalsPanel'],
     headline,
+    read: readSentence(s, valence, arousal, m.state),
+    ask: ASK[m.state],
     reasons,
   };
 }

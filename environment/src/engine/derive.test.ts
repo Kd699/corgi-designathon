@@ -53,3 +53,34 @@ describe('derive', () => {
     expect(derive(sig({})).reasons.length).toBeGreaterThan(0);
   });
 });
+
+// --- read + ask: the fields the daily-open concepts project ---
+
+describe('read and ask', () => {
+  const at = (p: Partial<Signals>) => derive({ ...DEFAULT_SIGNALS, ...p });
+
+  it('names its evidence in the read, so a wrong read is arguable', () => {
+    const spec = at({ heartRate: 96, motion: 0.34, hour: 8, mood: 2 });
+    expect(spec.read).toContain('96');
+    expect(spec.read.length).toBeGreaterThan(20);
+  });
+
+  it('gives a different read when the signals differ', () => {
+    const wound = at({ heartRate: 96, motion: 0.34, hour: 8, mood: 2 });
+    const light = at({ heartRate: 66, motion: 0.12, hour: 9, mood: 5 });
+    expect(wound.read).not.toEqual(light.read);
+  });
+
+  it('always offers an ask, so correction is never unavailable', () => {
+    for (const mood of [null, 1, 3, 5]) {
+      for (const heartRate of [55, 70, 120]) {
+        expect(at({ mood, heartRate }).ask.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('asks in the mascot voice that matches its state', () => {
+    expect(at({ idleSeconds: 200 }).ask).toBe('still there?');
+    expect(at({ heartRate: 125, motion: 0.6, mood: 1 }).ask).toBe('want to slow this down?');
+  });
+});
