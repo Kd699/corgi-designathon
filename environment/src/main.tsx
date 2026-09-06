@@ -1,10 +1,10 @@
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import Artboard from './artboard/Artboard';
+import DailyOpenLab from './pages/DailyOpenLab';
 import './index.css';
 
-/** Hash routing, because two surfaces do not justify a router. #/artboard is the design board. */
+/** Hash routing, because two surfaces do not justify a router. #/artboard is the concept lab. */
 function Root() {
   const [hash, setHash] = useState(window.location.hash);
   useEffect(() => {
@@ -12,7 +12,7 @@ function Root() {
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
-  return hash.startsWith('#/artboard') ? <Artboard /> : <App />;
+  return hash.startsWith('#/artboard') ? <DailyOpenLab /> : <App />;
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);

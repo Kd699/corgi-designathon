@@ -78,34 +78,49 @@ Open questions are in `docs/BRIEF.md`. The big one: which real-world signals sho
 allowed to change the environment without the user saying anything, and where is the
 line between responsive and creepy?
 
-## The artboard
+## The concept lab
 
 ```
 cd environment && npm run dev
 open http://localhost:5300/#/artboard
 ```
 
-`environment/src/artboard/` is a design board for **the daily open** - the screen you land on when
-the environment already knows you. Rows are scenarios, columns are four directions spread along one
-axis: *how loud is the environment's read?*
+A V3Artboard lab for **the daily open** - the screen you land on when the environment already
+knows you. Rows are scenarios, columns are four directions spread along one axis:
+*how loud is the environment's read?*
 
 | | |
 |---|---|
 | A · Weather | Never states the read. Atmosphere, mascot posture and which components exist are the whole message. |
 | B · The read, stated | Leads with the guess and its evidence, correction directly underneath. |
 | C · Mascot as narrator | The mascot carries the read and asks rather than asserts. |
-| D · Quiet read | B's spine with C's manners. The recommendation. |
+| D · Quiet read | B's spine with C's manners. |
 
-Every frame runs the real `derive()` and the real components - the board cannot show something the
-product would not do. Grid cells are static so a frame stays on the scenario it claims; click any
-frame to open it live with the Signals panel attached.
+```
+pages/DailyOpenLab.tsx        the spec: brand, sidebar, artboard rows, context cards
+pages/daily-open/
+  mode-config.ts              every cross-concept literal - labels, thesis, risk, correction wording
+  scenarios.ts                the four daily-open Signals snapshots
+  renderer.tsx                shared chrome written once + one layout per concept
+  modes.tsx                   four ScreenModes generated from the config
+components/v3artboard/        the shared runtime, ported in - do not edit per-lab
+```
 
-Adding a fifth direction is one entry in `concepts.tsx`; adding a scenario is one entry in
-`presets.ts`. Neither touches a renderer.
+Bird's-eye is the grid; Viewer is one screen at full size and **live** - rate a mood, answer the
+mascot, switch objective, and `derive()` re-runs. Artboard frames are deliberately inert so a grid
+cell cannot drift off the scenario it is labelled with.
+
+Every frame runs the real `derive()` and the real components, so the board cannot show something
+the product would not do. Adding a direction is one entry in `mode-config.ts` plus one layout;
+adding a scenario is one entry in `scenarios.ts`. Neither touches the shared chrome.
 
 Two fields exist on `EnvSpec` for this board: `read` (the guess with its evidence named, so a wrong
 read is arguable rather than mysterious) and `ask` (the correction phrased as a question). Both are
 computed in `derive()`, because a concept that decided its own wording would stop being a projection.
+
+Known limits of the ported runtime: no `componentFocus` widget isolation, no `SidebarItem.subgroup`
+(the sidebar nests via one section per concept instead), no localStorage/URL-hash persistence, and
+the Dev Mode toggle renders a placeholder rather than a wired inspector.
 
 ## Screenshots
 
