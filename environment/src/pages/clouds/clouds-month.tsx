@@ -50,7 +50,7 @@ const CSS = /* css */ `
   font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; color: #111;
   animation: mv-in 720ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes mv-in { from { clip-path: circle(0% at 50% 28px); } to { clip-path: circle(142% at 50% 28px); } }
-.mv-inner { width: min(92vw, 560px); margin: 0 auto; padding: 84px 0 48px;
+.mv-inner { width: min(92%, 560px); margin: 0 auto; padding: 84px 0 48px;
   animation: mv-settle 720ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes mv-settle { from { transform: scale(1.06); } to { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .mv, .mv-inner { animation: none; } }
@@ -153,9 +153,12 @@ export default function MonthCalendar({
     const sheet = sheetRef.current;
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!sheet || reduced) return onDay(offset);
+    // clip-path positions are the SHEET's own space — in split view the
+    // sheet is a right panel, not the viewport, so subtract its origin.
     const rect = cell.getBoundingClientRect();
-    const x = Math.round(rect.left + rect.width / 2);
-    const y = Math.round(rect.top + rect.height / 2);
+    const sheetRect = sheet.getBoundingClientRect();
+    const x = Math.round(rect.left + rect.width / 2 - sheetRect.left);
+    const y = Math.round(rect.top + rect.height / 2 - sheetRect.top);
     const zoom = sheet.animate(
       [
         { clipPath: `circle(142% at ${x}px ${y}px)` },

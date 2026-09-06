@@ -293,6 +293,31 @@ function DayNav({
   );
 }
 
+// THE SPLIT. Week and month scope break the single column: the motif's
+// stage glides LEFT and the content — the week's sessions, or the month's
+// calendar sheet — takes the RIGHT half, so the sky stays a subject
+// instead of a backdrop you scrolled away from. Today folds it all back
+// to one centred column. Wide screens only; a phone keeps the stack.
+const SPLIT_CSS = /* css */ `
+@media (min-width: 900px) {
+  .cm-stage { transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .ch { transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1), margin-top 700ms cubic-bezier(0.22, 1, 0.36, 1), width 700ms cubic-bezier(0.22, 1, 0.36, 1); }
+  [data-split="week"] .cm-stage, [data-split="month"] .cm-stage { transform: translateX(-23vw); }
+  /* The sessions column rides up into the first viewport and right of
+     centre; the sticky stage keeps the motif pinned beside it while the
+     cards scroll. Kept ABOVE the blur-away zone (top ~18vh). */
+  [data-split="week"] .ch { margin-top: -76vh; width: min(44vw, 520px); transform: translateX(calc(45vw - 50%)); }
+  [data-split="week"] .cm-stage { opacity: 1; }
+  /* The month sheet docks as a right panel instead of the whole page —
+     the sky and the shifted motif hold the left. */
+  [data-split="month"] .mv { left: auto; width: max(50vw, 620px); border-left: 1px solid rgba(0,0,0,0.06); box-shadow: -30px 0 60px rgba(16,18,28,0.10); }
+  [data-split="month"] .cn { left: calc(100vw - max(50vw, 620px) / 2); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cm-stage, .ch { transition: none; }
+}
+`;
+
 /** Solar time → a real Date for Atmosphere.updateByDate. The sun's direction
  *  comes from the date, so "1pm at longitude 30°E" must be handed over as
  *  11am UTC — hours minus longitude/15. Fixed to midsummer 2026 because only
@@ -751,6 +776,13 @@ export default function CloudsScene() {
   // (clouds-month.tsx), no scroll needed.
   useEffect(() => {
     if (scope === "month" || (dayOffset === 0 && scope === "day")) return;
+    // Split week (wide screens): the column is already up beside the motif
+    // — scrolling into it would race the layout transition and carry the
+    // top off-screen. Home the scroll instead.
+    if (scope === "week" && window.innerWidth >= 900) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     const id = requestAnimationFrame(() => {
       document.querySelector(".ch")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -838,7 +870,12 @@ export default function CloudsScene() {
   }, [voiceLive, setValue]);
 
   return (
-    <div ref={rootRef} className="relative min-h-[100dvh] w-full bg-black">
+    <div
+      ref={rootRef}
+      className="relative min-h-[100dvh] w-full bg-black"
+      data-split={voiceLive || scope === "day" ? "none" : scope}
+    >
+      <style>{SPLIT_CSS}</style>
       {/* The sky is FIXED: the page scrolls (motif, then the session
           history) and the canvas never moves under it. */}
       <div className="fixed inset-0">
