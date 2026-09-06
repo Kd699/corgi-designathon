@@ -2372,7 +2372,9 @@ function SidePanelBridgeApp() {
           agentShots={agentShots[records.find((r) => r.id === activeId)?.element || ''] || []}
         />
       )}
-      {/* Badge so thrash knows SPB is live */}
+      {/* Badge so thrash knows SPB is live. Not on /clouds: that route is a
+          full-bleed sky demo and the pill reads as part of the scene. */}
+      {!(window.location.pathname.startsWith('/clouds') || window.location.hash.startsWith('#/clouds')) && (
       <div
         data-agentation-spb-badge="true"
         style={{
@@ -2394,6 +2396,7 @@ function SidePanelBridgeApp() {
       >
         SPB on · ?spb=0 to opt out
       </div>
+      )}
     </>
   )
 }

@@ -470,6 +470,21 @@ export default function CloudsScene() {
     setValue("mood", moodForSky(values.sky));
   }, [values.sky, setValue]);
 
+  // "d" hides the whole DialKit dock (the floating circle included) for a
+  // clean frame. display:none rather than unmount, so the panel keeps its
+  // state. Keys typed into DialKit's own inputs don't count.
+  const [dialsVisible, setDialsVisible] = useState(true);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key !== "d" && e.key !== "D") || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      setDialsVisible((v) => !v);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <div className="relative h-[100dvh] w-full bg-black">
       {/* Keyed swap, not co-mounting: the engines are separate WebGL
@@ -498,7 +513,9 @@ export default function CloudsScene() {
         // transition, the mood select and the summary all follow.
         onTheme={(sky) => setValue("sky", sky)}
       />
-      <DialRoot position="top-right" theme="dark" productionEnabled />
+      <div style={{ display: dialsVisible ? undefined : "none" }}>
+        <DialRoot position="top-right" theme="dark" productionEnabled />
+      </div>
     </div>
   );
 }
