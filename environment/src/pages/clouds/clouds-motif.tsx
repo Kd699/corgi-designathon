@@ -201,9 +201,9 @@ const CSS = /* css */ `
 .cm-input { position: relative; pointer-events: auto; margin-top: 1em; width: min(76vmin, 440px); padding: 0 16px; }
 .cm-input input { width: 100%; height: 42px; padding: 0 48px 0 20px; border-radius: 999px; border: 1px solid rgba(0,0,0,0.08); background: #fff;
   color: #111; font: 400 14px 'Work Sans', ui-sans-serif, system-ui, sans-serif; text-align: left; outline: none;
-  box-shadow: 0 2px 14px rgba(10,16,30,0.12); transition: border-color 200ms ease, box-shadow 200ms ease; }
+  transition: border-color 200ms ease; }
 .cm-input input::placeholder { color: rgba(0,0,0,0.42); font-style: italic; }
-.cm-input input:focus { border-color: rgba(0,0,0,0.22); box-shadow: 0 2px 18px rgba(10,16,30,0.18); }
+.cm-input input:focus { border-color: rgba(0,0,0,0.22); }
 /* The send: a blue circle with a white arrow, parked at the pill's end. */
 .cm-send { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center;
   width: 30px; height: 30px; border-radius: 999px; border: none; padding: 0; background: #3478f6; color: #fff; cursor: pointer;
@@ -217,7 +217,7 @@ const CSS = /* css */ `
 [data-invert="true"] .cm-read { color: rgba(0,0,0,0.62); text-shadow: none; }
 [data-invert="true"] .cm-pill { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.24); color: rgba(0,0,0,0.72); }
 [data-invert="true"] .cm-sk { background-image: linear-gradient(90deg, rgba(0,0,0,0.06) 0%, rgba(0,0,0,0.16) 50%, rgba(0,0,0,0.06) 100%); }
-[data-invert="true"] .cm-input input { border-color: rgba(0,0,0,0.14); box-shadow: none; }
+[data-invert="true"] .cm-input input { border-color: rgba(0,0,0,0.14); }
 [data-invert="true"] .cm-note { color: rgba(0,0,0,0.52); }
 /* The voice stream: chat bubbles — yours, so they sit right with a small
    tail corner — cut in the sky's own palette; the last one rewrites
