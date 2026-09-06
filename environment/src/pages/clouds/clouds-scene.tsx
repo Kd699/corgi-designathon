@@ -384,8 +384,10 @@ export default function CloudsScene() {
     skyParam && (skyParam === "Live" || skyParam in SKY_PRESETS)
       ? skyParam
       : "Live";
-  const initialEngine =
-    params.get("engine")?.toLowerCase() === "volumetric" ? "Volumetric" : "Wisps";
+  // Volumetric is parked: the dial offers only Wisps (dialkit selects have
+  // no disabled state), and the ?engine= seed is ignored. The scene code
+  // stays; restoring the option is one line here.
+  const initialEngine = "Wisps";
   // Controller rather than plain useDialKit because presets WRITE a dial:
   // picking a sky swings view.heading to that sky's postcard direction.
   const dial = useDialKitController(
@@ -397,7 +399,7 @@ export default function CloudsScene() {
       // Advanced and View belong to Volumetric only; Wisps has no camera.
       engine: {
         type: "select",
-        options: ["Volumetric", "Wisps"],
+        options: ["Wisps"],
         default: initialEngine,
       },
       sky: {
