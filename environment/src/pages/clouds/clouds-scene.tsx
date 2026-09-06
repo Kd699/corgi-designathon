@@ -82,6 +82,7 @@ import WispsCanvas from "./clouds-wisps";
 import CloudsMotif, { MOTIF_MOODS } from "./clouds-motif";
 import SessionHistory, { isEmptyRead, loadHistory, saveHistory, type HistoryItem } from "./clouds-history";
 import TrendsCard from "./clouds-trends";
+import MonthCalendar from "./clouds-month";
 import { summariseDay, type DayPicture, type SessionRead } from "./clouds-session";
 import { THEME_SKY } from "./clouds-voice";
 import { moodForSky, readForSky } from "./clouds-signals";
@@ -744,11 +745,12 @@ export default function CloudsScene() {
     return history.filter((h) => new Date(h.at) >= start);
   }, [scope, history]);
   const shownItems = periodItems ?? dayItems;
-  // Stepping into a past day (or a wider scope) brings the sessions into
-  // view — the summary and the trends live down there, and a click that
-  // changes nothing on screen reads as a dead button.
+  // Stepping into a past day (or the week) brings the sessions into view —
+  // the summary and the trends live down there, and a click that changes
+  // nothing on screen reads as a dead button. Month is its own page
+  // (clouds-month.tsx), no scroll needed.
   useEffect(() => {
-    if (dayOffset === 0 && scope === "day") return;
+    if (scope === "month" || (dayOffset === 0 && scope === "day")) return;
     const id = requestAnimationFrame(() => {
       document.querySelector(".ch")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -885,33 +887,42 @@ export default function CloudsScene() {
           offset={dayOffset}
           day={viewedDay}
           canBack={canBack}
-          inverted={values.invert}
+          // The month page is a white sheet — the pill reads dark on it.
+          inverted={values.invert || scope === "month"}
           onStep={(delta) => setDayOffset((o) => Math.max(0, o + delta))}
         />
       )}
-      {!voiceLive && (
+      {/* Month scope is a page of its own: the calendar of shapes masks in
+          over everything (clouds-month.tsx); tapping a day masks out to
+          that day's sessions. Day and week keep the scrolling list. */}
+      {!voiceLive && scope === "month" && (
+        <MonthCalendar
+          history={history}
+          onDay={(offset) => {
+            setScope("day");
+            setDayOffset(offset);
+          }}
+        />
+      )}
+      {!voiceLive && scope !== "month" && (
         <SessionHistory
           items={shownItems}
           inverted={values.invert}
           title={
             scope === "week"
               ? "This week"
-              : scope === "month"
-                ? "This month"
-                : dayOffset === 0
-                  ? "Sessions"
-                  : dayLabel(dayOffset, viewedDay)
+              : dayOffset === 0
+                ? "Sessions"
+                : dayLabel(dayOffset, viewedDay)
           }
           lead={scope === "day" && dayRead ? dayRead.text : null}
-          extra={scope !== "day" ? <TrendsCard scope={scope} /> : null}
+          extra={scope === "week" ? <TrendsCard scope={scope} /> : null}
           emptyNote={
             scope === "week"
               ? "Nothing logged yet this week."
-              : scope === "month"
-                ? "Nothing logged yet this month."
-                : dayOffset > 0
-                  ? "Nothing logged this day."
-                  : null
+              : dayOffset > 0
+                ? "Nothing logged this day."
+                : null
           }
           onDelete={(at) =>
             setHistory((prev) => {
