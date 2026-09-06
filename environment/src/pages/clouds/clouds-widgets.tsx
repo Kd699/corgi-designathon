@@ -126,7 +126,8 @@ const CSS = /* css */ `
 @keyframes cw-pop { from { opacity: 0; transform: translateY(14px) scale(0.85); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .cw-card { animation: none; } }
 /* On the inverted (white) page the glass goes dark-on-light. */
-[data-invert="true"] .cw-card { background: rgba(24,36,54,0.05); border-color: rgba(24,36,54,0.22); color: #1e2a3a; }
+[data-invert="true"] .cw-card { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.18); color: #111; }
+[data-invert="true"] .cw-sub, [data-invert="true"] .cw-title { color: rgba(0,0,0,0.6); opacity: 1; }
 `;
 
 export function WidgetRow({ kinds }: { kinds: WidgetKind[] }) {

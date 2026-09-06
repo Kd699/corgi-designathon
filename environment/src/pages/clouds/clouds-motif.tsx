@@ -119,10 +119,10 @@ const CSS = /* css */ `
 .cm-mood-label { margin-top: 0.4em; font-family: 'PP Editorial Old', ui-serif, Georgia, serif; font-weight: 400; font-size: min(5vmin, 34px); line-height: 1; color: #fff; }
 .cm-read { margin-top: 0.9em; max-width: min(78vmin, 480px); padding: 0 16px; text-align: center; font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; font-weight: 400; font-size: 14px; line-height: 2; color: rgba(255,255,255,0.92); text-shadow: 0 1px 10px rgba(0,0,0,0.22); }
 .cm-pill { display: inline-block; padding: 0.05em 0.65em; margin: 0 0.1em; border-radius: 999px; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35); backdrop-filter: blur(6px); font-variant-numeric: tabular-nums; font-size: 0.86em; line-height: 1.6; white-space: nowrap; vertical-align: 0.05em; }
-/* Inverted page: the sheet is white, so the type goes dark. */
-[data-invert="true"] .cm-mood-label { color: #1e2a3a; }
-[data-invert="true"] .cm-read { color: rgba(24,36,54,0.88); text-shadow: none; }
-[data-invert="true"] .cm-pill { background: rgba(24,36,54,0.06); border-color: rgba(24,36,54,0.28); }
+/* Inverted page: the sheet is white, so the type goes black and grey. */
+[data-invert="true"] .cm-mood-label { color: #111; }
+[data-invert="true"] .cm-read { color: rgba(0,0,0,0.62); text-shadow: none; }
+[data-invert="true"] .cm-pill { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.24); color: rgba(0,0,0,0.72); }
 /* The voice stream: each settled utterance is a bubble cut in the sky's
    own palette; the last one rewrites itself live as you speak. */
 .cm-bubbles { display: flex; flex-direction: column; align-items: center; gap: 9px; margin-top: 1em; max-width: min(80vmin, 520px); padding: 0 16px; }
@@ -266,7 +266,7 @@ export default function CloudsMotif({
   const hasStream = voice.chunks.length > 0 || voice.interim.length > 0;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center" data-invert={inverted}>
+    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center" data-invert={inverted ? "true" : "false"}>
       <style>{CSS}</style>
       <div
         ref={voice.levelHostRef}
@@ -280,7 +280,7 @@ export default function CloudsMotif({
           className={`cm-motif${face.asleep ? " cm-asleep" : ""}`}
           data-expression={mood}
           data-voice={voice.listening}
-          data-invert={inverted}
+          data-invert={inverted ? "true" : "false"}
           viewBox="0 0 100 100"
           aria-hidden="true"
           style={style}
