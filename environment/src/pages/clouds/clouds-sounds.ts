@@ -223,11 +223,14 @@ const VOICE_START: Patch = {
   filter: { type: "lowpass", frequency: 714.2349904865259, Q: 5.32695814004476 },
 };
 
+// From the success pool: a rising three-note arpeggio with a longer ring
+// on the last note — the recording landed.
 const VOICE_END: Patch = {
-  source: { type: "sine", frequency: { start: 720, end: 360 } },
-  envelope: { attack: 0.002, decay: 0.08, sustain: 0, release: 0.025 },
-  gain: 0.12,
-  filter: { type: "lowpass", frequency: 1413.5381452319937, Q: 3.0540309085288526 },
+  layers: [
+    { source: { type: "sine", frequency: 435.402 }, envelope: { attack: 0.003, decay: 0.15, sustain: 0, release: 0, curve: "ramp" }, gain: 0.185 },
+    { source: { type: "sine", frequency: 581.192 }, envelope: { attack: 0.002, decay: 0.097, sustain: 0, release: 0, curve: "ramp" }, gain: 0.142, delay: 0.068 },
+    { source: { type: "sine", frequency: 870.803 }, envelope: { attack: 0.006, decay: 0.319, sustain: 0, release: 0, curve: "ramp" }, gain: 0.138, delay: 0.136 },
+  ],
 };
 
 const WIDGET_APPEAR: Patch = {
