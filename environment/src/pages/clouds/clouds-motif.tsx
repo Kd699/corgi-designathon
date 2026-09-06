@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import type { ReadSegment } from "./clouds-signals";
 import { cssPaletteFor, type SkyPresetName } from "./sky";
-import { useVoice } from "./clouds-voice";
+import { useVoice, type VoiceTheme } from "./clouds-voice";
 import { WidgetArc } from "./clouds-widgets";
 
 export type MotifMood = "Content" | "Excited" | "Tense" | "Weary" | "Asleep";
@@ -56,12 +56,21 @@ const SPECS: Record<MotifMood, FaceSpec> = {
   Asleep: { pleasant: 0.5, energy: 0.05, eyeHeight: 3.5, eyeTilt: 0, mouthCurve: 0, browTilt: -20, browOpacity: 0, blinkSeconds: 6, gazePixels: 0, asleep: true },
 };
 
+// While listening, spoken emotion themes wear the mascot's own shapes:
+// the voice circle morphs into the matching mood's blob.
+const THEME_MOODS: Record<VoiceTheme, MotifMood> = {
+  happy: "Excited",
+  anxious: "Tense",
+  sad: "Weary",
+  calm: "Content",
+};
+
 /** The study's outline() (buttonSpec.ts, index 0), as an SVG path in the
  *  100×100 viewBox instead of a CSS clip-path polygon. Same grammar: a
  *  superellipse that rounds as pleasant rises, scalloped edges when
  *  pleasant energy is high, notched cuts when unpleasant energy is high.
  *  64 points for every mood, so d: path() transitions can interpolate. */
-function blobPath(pleasant: number, energy: number): string {
+function blobPath(pleasant: number, energy: number, size = 46): string {
   const exponent = 5 - pleasant * 3;
   const points = Array.from({ length: 64 }, (_, i) => {
     const angle = (i * Math.PI * 2) / 64;
@@ -70,7 +79,7 @@ function blobPath(pleasant: number, energy: number): string {
     const radius = 1 / Math.pow(Math.pow(Math.abs(x), exponent) + Math.pow(Math.abs(y), exponent), 1 / exponent);
     const scallop = 1 - pleasant * energy * 0.07 * (1 + Math.cos(angle * 6));
     const cut = 1 - (1 - pleasant) * energy * 0.17 * (1 + Math.cos(angle * 4));
-    return `${(50 + x * radius * scallop * cut * 46).toFixed(2)} ${(50 + y * radius * scallop * cut * 46).toFixed(2)}`;
+    return `${(50 + x * radius * scallop * cut * size).toFixed(2)} ${(50 + y * radius * scallop * cut * size).toFixed(2)}`;
   });
   return `M ${points[0]} L ${points.slice(1).join(" L ")} Z`;
 }
@@ -164,7 +173,15 @@ export default function CloudsMotif({
   // Voice always speaks on the white page: listening forces the inverted
   // layout — sky masked into the shape — whatever the dial says.
   const inverted = invert || voice.listening;
-  const blob = voice.listening ? circlePath() : blobPath(face.pleasant, face.energy);
+  // The listening shape starts as a neutral circle, then MORPHS into the
+  // mascot blob of whatever emotion theme is in the air — excited's
+  // scallops, tense's notches, weary's droop — at voice-tracker scale.
+  const voiceSpec = voice.theme ? SPECS[THEME_MOODS[voice.theme]] : null;
+  const blob = voice.listening
+    ? voiceSpec
+      ? blobPath(voiceSpec.pleasant, voiceSpec.energy, 34)
+      : circlePath()
+    : blobPath(face.pleasant, face.energy);
   const palette = useMemo(() => cssPaletteFor(sky), [sky]);
   const style = {
     "--cm-blink-duration": `${face.blinkSeconds}s`,
