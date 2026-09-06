@@ -49,6 +49,7 @@ type SpeechRecognitionLike = {
   lang: string;
   onresult: ((e: { results: ArrayLike<SRResult> }) => void) | null;
   onerror: ((e: { error: string }) => void) | null;
+  onaudiostart: (() => void) | null;
   onend: (() => void) | null;
   start(): void;
   stop(): void;
@@ -80,6 +81,10 @@ export function useVoice({ onTheme, onEnd, onStart }: VoiceOptions = {}) {
   /** The emotion theme currently in the air — morphs the voice shape. */
   const [theme, setTheme] = useState<VoiceTheme | null>(null);
   const [supported, setSupported] = useState(true);
+  /** True once the recogniser is actually capturing — words land from
+   *  here on. Before this, speech is lost to the connection window, so
+   *  the UI should say "connecting" rather than invite talk. */
+  const [ready, setReady] = useState(false);
 
   const listeningRef = useRef(false);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
@@ -171,16 +176,18 @@ export function useVoice({ onTheme, onEnd, onStart }: VoiceOptions = {}) {
   const start = useCallback(async () => {
     listeningRef.current = true;
     setListening(true);
-    reset();
-    callbacks.current.onStart?.();
-    playVoiceStart();
+    setReady(false);
 
+    // The recogniser goes FIRST: its start() opens a connection to the
+    // speech service and nothing said before that lands. Everything
+    // else in this function can happen behind it.
     const rec = makeRecognition();
     setSupported(rec !== null);
     if (rec) {
       rec.continuous = true;
       rec.interimResults = true;
       rec.lang = navigator.language || "en-US";
+      rec.onaudiostart = () => setReady(true);
       rec.onresult = (e) => {
         // Chunking is the recogniser's own utterance segmentation: each
         // finalised result is a settled bubble, the interim tail is the
@@ -225,6 +232,10 @@ export function useVoice({ onTheme, onEnd, onStart }: VoiceOptions = {}) {
         setSupported(false);
       }
     }
+
+    reset();
+    callbacks.current.onStart?.();
+    playVoiceStart();
 
     // The level meter is a separate mic tap: an FFT per frame, five band
     // energies plus overall RMS, each auto-gained against a slow-decaying
@@ -290,6 +301,7 @@ export function useVoice({ onTheme, onEnd, onStart }: VoiceOptions = {}) {
   const stop = useCallback(() => {
     listeningRef.current = false;
     setListening(false);
+    setReady(false);
     playVoiceEnd();
     stopInternals();
     // The interim tail is part of what you said — settle it before handing over.
@@ -336,5 +348,5 @@ export function useVoice({ onTheme, onEnd, onStart }: VoiceOptions = {}) {
     };
   }, [stopInternals]);
 
-  return { listening, chunks, interim, widgets, theme, supported, toggle, typed, levelHostRef };
+  return { listening, chunks, interim, widgets, theme, supported, ready, toggle, typed, levelHostRef };
 }

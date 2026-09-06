@@ -291,7 +291,12 @@ export default function CloudsMotif({
       <div
         ref={voice.levelHostRef}
         className="cm-wrap"
-        onClick={voice.toggle}
+        // pointerdown, not click: the session starts on press, not on
+        // release, buying the speech service its connection time while
+        // the finger is still coming up.
+        onPointerDown={(e) => {
+          if (e.button === 0) voice.toggle();
+        }}
         role="button"
         aria-label={voice.listening ? "Stop listening" : "Start voice"}
       >
@@ -349,9 +354,11 @@ export default function CloudsMotif({
       {voice.listening && !hasStream && (
         <p className="cm-read">
           <span style={{ opacity: 0.65, fontStyle: "italic" }}>
-            {voice.supported
-              ? "talk about your sleep, recovery or strain\u2026"
-              : "speech recognition isn't available in this browser"}
+            {!voice.supported
+              ? "speech recognition isn't available in this browser"
+              : voice.ready
+                ? "go ahead — sleep, recovery, strain, or how you feel\u2026"
+                : "connecting\u2026"}
           </span>
         </p>
       )}

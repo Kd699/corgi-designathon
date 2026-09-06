@@ -32,6 +32,7 @@ function dialsFor(hour: number, arousal: number, valence: number, expression: Bu
     mood: MOOD_FOR[expression],
     invert: false,
     smile: false,
+    experimental: { circleReveal: false },
     // A wound-up day moves faster and holds a denser deck; a light one thins out.
     speed: 0.5 + arousal * 1.2,
     fullness: 0.75 + (1 - (valence + 1) / 2) * 0.6,
