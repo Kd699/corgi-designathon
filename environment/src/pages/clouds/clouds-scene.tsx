@@ -504,16 +504,18 @@ export default function CloudsScene() {
   // the mood groups them (clouds-session.ts summariseDay) instead of
   // quoting only the latest; one at most, and the single read stands.
   const [picture, setPicture] = useState<DayPicture | null>(null);
+  // A refresh starts a NEW session: the picture only groups check-ins made
+  // since this page load. The saved history still scrolls below — it just
+  // doesn't dress the motif on arrival.
+  const visitStart = useRef(new Date().toISOString());
   useEffect(() => {
-    const today = history.filter(
-      (h) => new Date(h.at).toDateString() === new Date().toDateString()
-    );
-    if (today.length < 2) {
+    const thisVisit = history.filter((h) => h.at >= visitStart.current);
+    if (thisVisit.length < 2) {
       setPicture(null);
       return;
     }
     let alive = true;
-    summariseDay(today).then((p) => {
+    summariseDay(thisVisit).then((p) => {
       if (!alive) return;
       setPicture(p);
       // Two messages in, the picture COMMITS: the face morphs to where the
@@ -566,13 +568,9 @@ export default function CloudsScene() {
     setSession(null);
   }, [values.sky, setValue]);
 
-  // Landing with sessions already logged today: wear the last one's mood
-  // (after the sky effect above, so it wins on mount).
-  useEffect(() => {
-    const last = history[history.length - 1];
-    if (last && new Date(last.at).toDateString() === new Date().toDateString()) setValue("mood", last.mood);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Arriving (or refreshing) is a NEW session: the motif greets from the
+  // clock's own sky and mood — yesterday's (or a minute ago's) reads stay
+  // in the history below without dressing the face.
 
   // While the voice session is live (listening or thinking) the history
   // list unmounts — reported up by the motif, which owns the mic.
