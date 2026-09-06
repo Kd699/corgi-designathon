@@ -141,10 +141,10 @@ const SCOPE_OPTIONS: { id: SessionScope; label: string }[] = [
 ];
 
 const DAY_NAV_CSS = /* css */ `
+/* No chrome of its own: the pill is just the label and arrows floating
+   over the sky — the menu below carries the glass. */
 .cn { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 30; pointer-events: auto;
-  display: flex; align-items: center; gap: 2px; padding: 4px 6px; border-radius: 999px;
-  background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.32);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  display: flex; align-items: center; gap: 2px; padding: 4px 6px;
   font-family: 'Work Sans', ui-sans-serif, system-ui, sans-serif; color: #fff; }
 .cn-btn { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px;
   border: none; border-radius: 999px; padding: 0; background: transparent; color: inherit; cursor: pointer;
@@ -183,7 +183,7 @@ const DAY_NAV_CSS = /* css */ `
 }
 @media (prefers-reduced-motion: reduce) { .cn-item { animation: none; } }
 /* On the inverted (white) page the pill and menu go dark-on-light. */
-.cn[data-invert="true"] { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.18); color: #111; }
+.cn[data-invert="true"] { color: #111; }
 .cn[data-invert="true"] .cn-btn:hover, .cn[data-invert="true"] .cn-label:hover, .cn[data-invert="true"] .cn-item:hover { background: rgba(0,0,0,0.08); }
 .cn[data-invert="true"] .cn-menu { background: rgba(255,255,255,0.85); border-color: rgba(0,0,0,0.14); }
 .cn[data-invert="true"] .cn-item[data-current="true"] { background: rgba(0,0,0,0.1); }
