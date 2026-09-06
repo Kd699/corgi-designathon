@@ -666,9 +666,14 @@ export default function CloudsScene() {
           }
         />
       )}
-      <div style={{ display: dialsVisible ? undefined : "none" }}>
-        <DialRoot position="top-right" theme="dark" productionEnabled />
-      </div>
+      {/* Mounted only when summoned: DialRoot portals to document.body, so
+          a display:none wrapper can't hide it — unmount is the real hide.
+          Dial values live in the controller store, so nothing is lost.
+          defaultOpen={false}: it arrives as the closed circle; the panel
+          opens only when clicked. */}
+      {dialsVisible && (
+        <DialRoot position="top-right" theme="dark" productionEnabled defaultOpen={false} />
+      )}
     </div>
   );
 }
