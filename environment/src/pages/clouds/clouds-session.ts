@@ -308,11 +308,20 @@ export function localRead(text: string, ctx: SessionContext): SessionRead {
     sad: "A heavy one",
     calm: "Settled, mostly",
   };
+  // No theme word said: the heading still names the sentiment — the mood
+  // is always derived, so the line under the mascot never goes generic.
+  const headingByMood: Record<MotifMood, string> = {
+    Excited: "Riding high",
+    Tense: "Wound up",
+    Content: "Steady and settled",
+    Weary: "Running low",
+    Asleep: "Barely awake",
+  };
   const heading = topicLine
     ? `Talking ${topicLine}`.replace(/^Talking/, theme ? `${headingByTheme[theme].split(",")[0]} —` : "Talking")
     : theme
       ? headingByTheme[theme]
-      : "What you said";
+      : headingByMood[mood];
 
   const words = text.split(/\s+/);
   const quote = words.length > 22 ? `${words.slice(0, 22).join(" ")}…` : text;
