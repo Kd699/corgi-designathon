@@ -1,13 +1,62 @@
-export type Axis = 'horizontal' | 'vertical';
+export type Kind =
+  | 'size'
+  | 'lead'
+  | 'weight'
+  | 'tracking'
+  | 'slant'
+  | 'gravity'
+  | 'contrast'
+  | 'case'
+  | 'wave'
+  | 'eraser';
 
 export type Rect = { x: number; y: number; w: number; h: number };
 
 export type Control = {
   id: number;
-  axis: Axis;
+  kind: Kind;
   x: number;
   y: number;
   value: number;
+};
+
+export const KINDS: Kind[] = [
+  'size',
+  'lead',
+  'weight',
+  'tracking',
+  'slant',
+  'gravity',
+  'contrast',
+  'case',
+  'wave',
+  'eraser',
+];
+
+export const KIND_LABEL: Record<Kind, string> = {
+  size: 'Font size',
+  lead: 'Line spacing',
+  weight: 'Weight',
+  tracking: 'Tracking',
+  slant: 'Slant',
+  gravity: 'Gravity',
+  contrast: 'Contrast',
+  case: 'Case',
+  wave: 'Wave',
+  eraser: 'Eraser',
+};
+
+export const KIND_HINT: Record<Kind, string> = {
+  size: 'Horizontal',
+  lead: 'Vertical',
+  weight: 'Turn the dial',
+  tracking: 'Pinch the dots',
+  slant: 'Tilt the lever',
+  gravity: 'Words lean in',
+  contrast: 'Near stays sharp',
+  case: 'Drop on the text',
+  wave: 'Pull the string',
+  eraser: 'Shake to restore',
 };
 
 export const REST_SIZE = 21;
@@ -25,9 +74,27 @@ export const REACH = 156;
 export const INK_PAD = 18;
 export const LINK_AT = 0.58;
 
-export const CONTROL_BOX: Record<Axis, { w: number; h: number }> = {
-  horizontal: { w: 252, h: 108 },
-  vertical: { w: 140, h: 268 },
+export const REST_WEIGHT = 400;
+export const REST_TRACK = 0;
+export const REST_SLANT = 0;
+export const WEIGHT_MIN = 100;
+export const WEIGHT_MAX = 900;
+export const TRACK_MIN = -0.05;
+export const TRACK_MAX = 0.24;
+export const SLANT_MIN = -10;
+export const SLANT_MAX = 0;
+
+export const CONTROL_BOX: Record<Kind, { w: number; h: number }> = {
+  size: { w: 252, h: 108 },
+  lead: { w: 140, h: 268 },
+  weight: { w: 168, h: 178 },
+  tracking: { w: 220, h: 136 },
+  slant: { w: 168, h: 168 },
+  gravity: { w: 136, h: 136 },
+  contrast: { w: 136, h: 136 },
+  case: { w: 168, h: 136 },
+  wave: { w: 220, h: 132 },
+  eraser: { w: 156, h: 148 },
 };
 
 export const NUDGE_STEP = 16;
@@ -42,9 +109,41 @@ export function surfaceSize(fieldW: number, fieldH: number): { w: number; h: num
   };
 }
 
-export function controlBox(control: Pick<Control, 'axis' | 'x' | 'y'>): Rect {
-  const size = CONTROL_BOX[control.axis];
+export function controlBox(control: Pick<Control, 'kind' | 'x' | 'y'>): Rect {
+  const size = CONTROL_BOX[control.kind];
   return { x: control.x, y: control.y, w: size.w, h: size.h };
+}
+
+export function spawnValue(kind: Kind): number {
+  switch (kind) {
+    case 'size':
+      return SPAWN_SIZE;
+    case 'lead':
+      return SPAWN_LEAD;
+    case 'weight':
+      return 760;
+    case 'tracking':
+      return 0.14;
+    case 'slant':
+      return -8;
+    case 'gravity':
+      return 0.85;
+    case 'contrast':
+      return 1;
+    case 'case':
+      return 1;
+    case 'wave':
+      return 12;
+    case 'eraser':
+      return 1;
+  }
+}
+
+/** Heavier weight knobs grow a thicker bridge. Other controls stay at 1. */
+export function inkBulk(kind: Kind, value: number): number {
+  if (kind !== 'weight') return 1;
+  const t = (value - WEIGHT_MIN) / (WEIGHT_MAX - WEIGHT_MIN);
+  return 0.4 + Math.min(1, Math.max(0, t)) * 1.35;
 }
 
 export function inkBounds(surface: { x: number; y: number }, size: { w: number; h: number }): Rect {
@@ -105,9 +204,9 @@ export function blendWithRest(parts: { value: number; weight: number }[], rest: 
   return acc / weight;
 }
 
-export function bridgeThickness(pull: number): number {
+export function bridgeThickness(pull: number, bulk = 1): number {
   if (pull <= 0.045) return 0;
-  return 16 + Math.pow(pull, 0.8) * 72;
+  return (16 + Math.pow(pull, 0.8) * 72) * bulk;
 }
 
 export function satelliteScale(pull: number): number {
@@ -154,8 +253,30 @@ export function formatLead(value: number): string {
   return (Math.round(value * 100) / 100).toFixed(2);
 }
 
-export function controlTitle(control: Pick<Control, 'id' | 'axis'>): string {
-  return control.axis === 'horizontal' ? `Font size ${control.id}` : `Line spacing ${control.id}`;
+export function controlTitle(control: Pick<Control, 'id' | 'kind'>): string {
+  return `${KIND_LABEL[control.kind]} ${control.id}`;
+}
+
+export function shortLabel(kind: Kind, id: number): string {
+  const brief: Record<Kind, string> = {
+    size: 'Size',
+    lead: 'Spacing',
+    weight: 'Weight',
+    tracking: 'Track',
+    slant: 'Slant',
+    gravity: 'Gravity',
+    contrast: 'Contrast',
+    case: 'Case',
+    wave: 'Wave',
+    eraser: 'Eraser',
+  };
+  return `${brief[kind]} ${id}`;
+}
+
+export function caseName(value: number): string {
+  if (value === 2) return 'abc';
+  if (value === 3) return 'Small caps';
+  return 'ABC';
 }
 
 export function centerOf(rect: Rect): { x: number; y: number } {

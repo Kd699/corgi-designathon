@@ -146,17 +146,18 @@
 
 .instrument {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
-  margin-bottom: 12px;
-  padding: 14px 14px 12px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
   background: var(--card);
   color: var(--ink);
   border: 1px solid var(--ink);
-  border-radius: 14px;
-  box-shadow: 3px 3px 0 var(--ink);
+  border-radius: 10px;
+  box-shadow: 2px 2px 0 var(--ink);
   text-align: left;
   touch-action: none;
   cursor: grab;
@@ -343,11 +344,46 @@
   text-transform: uppercase;
 }
 
-.surface textarea {
+.page {
+  position: relative;
   flex: 1;
   min-height: 0;
-  width: 100%;
   margin: 12px 0 10px;
+}
+
+.word-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: #f4f4f2;
+  white-space: pre;
+}
+
+.word-stage span {
+  position: absolute;
+  white-space: pre;
+  transform-origin: center left;
+}
+
+.surface textarea,
+.word-stage {
+  font-family: "Roboto Flex Variable", "Helvetica Neue", Helvetica, sans-serif;
+  font-style: oblique;
+  font-weight: var(--wght, 400);
+  font-variation-settings: "wght" var(--wght, 400), "slnt" var(--slnt, 0), "opsz" 18, "wdth" 100;
+  letter-spacing: var(--track, 0em);
+  text-transform: var(--xform, none);
+  font-variant-caps: var(--caps, normal);
+}
+
+.surface textarea {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  margin: 0;
   padding: 0 8px 0 0;
   border: 0;
   resize: none;
@@ -355,11 +391,13 @@
   background: transparent;
   color: #f4f4f2;
   caret-color: #f7f7f5;
-  font-family: Palatino, "Palatino Linotype", "Iowan Old Style", Georgia, serif;
-  letter-spacing: -0.011em;
   cursor: text;
   scrollbar-width: thin;
   scrollbar-color: #6a6a68 transparent;
+}
+
+.surface textarea.is-fx {
+  color: transparent;
 }
 
 .surface textarea::-webkit-scrollbar {
@@ -635,6 +673,125 @@
   letter-spacing: -0.04em;
   line-height: 0.85;
   font-variant-numeric: tabular-nums;
+}
+
+.specimen-extra {
+  margin: -8px 0 16px;
+}
+
+.dial-row,
+.pinch,
+.wave {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 72px;
+  flex: 1;
+}
+
+.dial,
+.lever {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+  touch-action: none;
+}
+
+.dial i,
+.lever i {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  width: 2px;
+  height: 24px;
+  margin-left: -1px;
+  background: currentColor;
+  transform-origin: center 28px;
+}
+
+.lever {
+  width: 100%;
+  border-radius: 12px;
+}
+
+.lever span {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pinch-line {
+  position: absolute;
+  left: 18px;
+  top: 28px;
+  height: 1px;
+  background: currentColor;
+}
+
+.dot,
+.wave-handle {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #0c0c0c;
+  border-radius: 50%;
+  background: #f7f7f5;
+  touch-action: none;
+}
+
+.dot {
+  position: absolute;
+  top: 21px;
+  left: 12px;
+}
+
+.dot-live {
+  padding: 0;
+}
+
+.blob-mark,
+.puck-mark {
+  width: 46px;
+  height: 46px;
+  margin: 6px auto;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.puck-mark {
+  background: transparent;
+  border: 8px solid currentColor;
+  box-shadow: inset 0 0 0 6px color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.cycle,
+.restore {
+  align-self: flex-start;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  padding: 4px 10px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.wave svg {
+  width: 100%;
+  height: 40px;
+}
+
+.wave path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.wave-handle {
+  position: absolute;
+  left: 50%;
+  margin-left: -7px;
 }
 
 .pull-list {

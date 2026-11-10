@@ -28,7 +28,20 @@ The field starts with only the text surface, set in a resting face (21px, 1.50 l
 
 **Watch the ink.** Each control has a reach of about 156 pixels, measured as the gap between its card and the ink. Inside that reach, pull rises on a smooth curve from 0 to 1. The surface draws a soft bridge and a satellite blob; an SVG blur-and-threshold filter welds them into one body. Past a pull of about 58%, the card gives up its paper fill and sits in the ink. Farther away, the bridge thins and disappears.
 
-**Read the type.** Font size listens only to horizontal controls. Line spacing listens only to vertical ones. Until nearby pull adds up to full strength, the resting face keeps the remaining share, so type eases out of rest instead of jumping. After that, the nearby controls share the result by pull. The specimen on the right, the meter on each card, and the line under the field all show the same numbers.
+**Read the type.** Font size listens only to horizontal controls. Line spacing listens only to vertical ones. Weight, tracking, and slant listen to their own instruments the same way: until nearby pull adds up to full strength, the resting face keeps the remaining share. The writing face is Roboto Flex, so weight and slant move smoothly.
+
+The other instruments are spatial:
+
+- **Weight** is a dial. Its angle runs from thin to black, and the ink bridge gets thicker as the weight does.
+- **Tracking** is two linked dots. Pull them apart to open letter-spacing, push them together to tighten it.
+- **Slant** is a lever. Its angle leans the letters toward oblique.
+- **Gravity** pulls nearby words toward the blob.
+- **Contrast** keeps words near the puck sharp and fades farther words toward grey.
+- **Case** switches ABC, abc, or small caps when it is dropped on the text. The button on the card cycles the same three.
+- **Wave** is a string. Pull the handle and the baseline ripples.
+- **Eraser** fades words it passes over. Shake it back and forth, or press Restore, to bring them back.
+
+Every card is labeled. Arrow keys still move a focused Move handle. A dial, pinch, lever, or string has its own slider keys, so those arrows change the value instead of the position.
 
 ## Keyboard
 

@@ -1,3 +1,13 @@
+@font-face {
+  font-family: "Roboto Flex Variable";
+  font-style: oblique 0deg 10deg;
+  font-weight: 100 1000;
+  font-stretch: 25% 151%;
+  font-display: swap;
+  src: url("../node_modules/@fontsource-variable/roboto-flex/files/roboto-flex-latin-full-normal.woff2")
+    format("woff2");
+}
+
 html,
 body,
 #root {

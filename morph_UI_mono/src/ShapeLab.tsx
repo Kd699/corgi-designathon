@@ -5,6 +5,9 @@ import {
   CONTROL_BOX,
   KEY_STEP,
   KEY_STEP_LARGE,
+  KIND_HINT,
+  KIND_LABEL,
+  KINDS,
   LEAD_MAX,
   LEAD_MIN,
   LEAD_STEP,
@@ -12,13 +15,21 @@ import {
   NUDGE_STEP,
   REST_LEAD,
   REST_SIZE,
+  REST_SLANT,
+  REST_TRACK,
+  REST_WEIGHT,
   SIZE_MAX,
   SIZE_MIN,
   SIZE_STEP,
-  SPAWN_LEAD,
-  SPAWN_SIZE,
+  SLANT_MAX,
+  SLANT_MIN,
+  TRACK_MAX,
+  TRACK_MIN,
+  WEIGHT_MAX,
+  WEIGHT_MIN,
   blendWithRest,
   bridgeThickness,
+  caseName,
   centerOf,
   clampInside,
   controlBox,
@@ -29,12 +40,16 @@ import {
   gapBetween,
   inflate,
   inkBounds,
+  inkBulk,
   pullFromGap,
   satelliteScale,
   scaleAboutCenter,
+  shortLabel,
+  spawnValue,
   surfaceSize,
 } from './geometry';
-import type { Axis, Control, Rect } from './geometry';
+import type { Control, Kind, Rect } from './geometry';
+import { isShake, layoutWords, styleWords, wordsUnderEraser } from './typefx';
 
 const INITIAL_TEXT = `The surface is a body of ink.
 
@@ -44,24 +59,17 @@ They stay where you drop them.`;
 
 type Selection = 'surface' | number;
 
-type Drag =
-  | {
-      kind: 'control';
-      id: number;
-      ox: number;
-      oy: number;
-      nx: number;
-      ny: number;
-      frame: number;
-    }
-  | {
-      kind: 'surface';
-      ox: number;
-      oy: number;
-      nx: number;
-      ny: number;
-      frame: number;
-    };
+type Drag = {
+  kind: 'control' | 'surface';
+  id: number;
+  ox: number;
+  oy: number;
+  nx: number;
+  ny: number;
+  frame: number;
+  samples: { t: number; x: number }[];
+  caseWasOn: boolean;
+};
 
 type Metric = Control & { box: Rect; gap: number; pull: number };
 
@@ -83,20 +91,34 @@ function derive(surface: { x: number; y: number }, controls: Control[], field: F
     return { ...control, box, gap, pull: pullFromGap(gap) };
   });
   const fontSize = blendWithRest(
-    metrics.filter((item) => item.axis === 'horizontal').map((item) => ({ value: item.value, weight: item.pull })),
+    metrics.filter((item) => item.kind === 'size').map((item) => ({ value: item.value, weight: item.pull })),
     REST_SIZE,
   );
   const lineHeight = blendWithRest(
-    metrics.filter((item) => item.axis === 'vertical').map((item) => ({ value: item.value, weight: item.pull })),
+    metrics.filter((item) => item.kind === 'lead').map((item) => ({ value: item.value, weight: item.pull })),
     REST_LEAD,
   );
+  const weight = blendWithRest(
+    metrics.filter((item) => item.kind === 'weight').map((item) => ({ value: item.value, weight: item.pull })),
+    REST_WEIGHT,
+  );
+  const tracking = blendWithRest(
+    metrics.filter((item) => item.kind === 'tracking').map((item) => ({ value: item.value, weight: item.pull })),
+    REST_TRACK,
+  );
+  const slant = blendWithRest(
+    metrics.filter((item) => item.kind === 'slant').map((item) => ({ value: item.value, weight: item.pull })),
+    REST_SLANT,
+  );
+  const onText = metrics.filter((item) => item.kind === 'case' && item.gap <= 0);
+  const caseMode = onText.length ? onText[onText.length - 1].value : 0;
   const maxPull = metrics.reduce((max, item) => Math.max(max, item.pull), 0);
-  return { size, ink, metrics, fontSize, lineHeight, maxPull };
+  return { size, ink, metrics, fontSize, lineHeight, weight, tracking, slant, caseMode, maxPull };
 }
 
 function reading(fontSize: number, lineHeight: number, metrics: Metric[]): string {
-  const sizes = metrics.filter((item) => item.axis === 'horizontal' && item.pull > 0.004);
-  const leads = metrics.filter((item) => item.axis === 'vertical' && item.pull > 0.004);
+  const sizes = metrics.filter((item) => item.kind === 'size' && item.pull > 0.004);
+  const leads = metrics.filter((item) => item.kind === 'lead' && item.pull > 0.004);
   const sizeClause = sizes.length
     ? `Font size ${formatSize(fontSize)}px, from ${sizes
         .map((item) => `${controlTitle(item)} at ${Math.round(item.pull * 100)}%`)
@@ -117,6 +139,7 @@ function wordCount(text: string): number {
 
 export default function ShapeLab() {
   const fieldRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
   const dragRef = useRef<Drag | null>(null);
   const [field, setField] = useState<Field>({ w: 0, h: 0 });
@@ -125,6 +148,7 @@ export default function ShapeLab() {
   const [selected, setSelected] = useState<Selection>('surface');
   const [dragging, setDragging] = useState(false);
   const [text, setText] = useState(INITIAL_TEXT);
+  const [erased, setErased] = useState<number[]>([]);
   const [notice, setNotice] = useState('The field is empty. Add a control from the library.');
 
   const fieldRefState = useRef(field);
@@ -196,11 +220,46 @@ export default function ShapeLab() {
     }
     const current = controlsRef.current.find((item) => item.id === drag.id);
     if (!current) return;
-    const box = CONTROL_BOX[current.axis];
+    const box = CONTROL_BOX[current.kind];
     const next = dragPosition(pointer, { x: drag.ox, y: drag.oy }, box, bounds);
     drag.nx = next.x;
     drag.ny = next.y;
-    commitControls(controlsRef.current.map((item) => (item.id === drag.id ? { ...item, ...next } : item)));
+    const moved = controlsRef.current.map((item) => (item.id === drag.id ? { ...item, ...next } : item));
+    commitControls(moved);
+    if (current.kind === 'eraser') markEraser(drag, next.x + box.w / 2, next.y + box.h / 2);
+  }
+
+  function textMetrics() {
+    const page = pageRef.current;
+    const fieldEl = fieldRef.current;
+    const view = derive(surfaceRef.current, controlsRef.current, fieldRefState.current);
+    let originX = surfaceRef.current.x + 18;
+    let originY = surfaceRef.current.y + 58;
+    let width = view.size.w - 36;
+    if (page && fieldEl) {
+      const pageBox = page.getBoundingClientRect();
+      const fieldBox = fieldEl.getBoundingClientRect();
+      originX = pageBox.left - fieldBox.left;
+      originY = pageBox.top - fieldBox.top;
+      width = page.clientWidth;
+    }
+    return { view, originX, originY, width };
+  }
+
+  function markEraser(drag: Drag, x: number, y: number) {
+    const now = performance.now();
+    drag.samples.push({ t: now, x });
+    if (drag.samples.length > 24) drag.samples.shift();
+    if (isShake(drag.samples, now)) {
+      setErased([]);
+      drag.samples.length = 0;
+      return;
+    }
+    const { view, originX, originY, width } = textMetrics();
+    const words = layoutWords(text, width, view.fontSize, view.lineHeight, view.weight, view.tracking);
+    const hits = wordsUnderEraser(words, originX, originY, view.fontSize * view.lineHeight, x, y);
+    if (hits.length === 0) return;
+    setErased((current) => Array.from(new Set([...current, ...hits])));
   }
 
   function onPointerMove(event: ReactPointerEvent) {
@@ -234,6 +293,12 @@ export default function ShapeLab() {
     const control = controlsRef.current.find((item) => item.id === drag.id);
     if (!control) return;
     const pull = view.metrics.find((item) => item.id === control.id)?.pull ?? 0;
+    if (control.kind === 'case' && pull >= 1 && !drag.caseWasOn) {
+      const value = control.value >= 3 ? 1 : control.value + 1;
+      commitControls(controlsRef.current.map((item) => (item.id === control.id ? { ...item, value } : item)));
+      announce(`${controlTitle(control)} dropped on the text. Case is now ${caseName(value)}. It stays there.`);
+      return;
+    }
     announce(
       `${controlTitle(control)} released at ${Math.round(control.x)}, ${Math.round(control.y)}. Pull ${Math.round(pull * 100)}%. It stays there.`,
     );
@@ -249,11 +314,14 @@ export default function ShapeLab() {
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = {
       kind: 'surface',
+      id: 0,
       ox: pointer.x - at.x,
       oy: pointer.y - at.y,
       nx: at.x,
       ny: at.y,
       frame: 0,
+      samples: [],
+      caseWasOn: false,
     };
     setSelected('surface');
     setDragging(true);
@@ -267,6 +335,7 @@ export default function ShapeLab() {
     const pointer = toField(event);
     const control = controlsRef.current.find((item) => item.id === id);
     if (!control) return;
+    const gap = gapBetween(inkBounds(surfaceRef.current, surfaceSize(fieldRefState.current.w, fieldRefState.current.h)), controlBox(control));
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = {
       kind: 'control',
@@ -276,23 +345,25 @@ export default function ShapeLab() {
       nx: control.x,
       ny: control.y,
       frame: 0,
+      samples: [],
+      caseWasOn: control.kind === 'case' && gap <= 0,
     };
     setSelected(id);
     setDragging(true);
     document.getElementById(`move-${id}`)?.focus({ preventScroll: true });
   }
 
-  function beginLibraryDrag(event: ReactPointerEvent<HTMLButtonElement>, axis: Axis) {
+  function beginLibraryDrag(event: ReactPointerEvent<HTMLButtonElement>, kind: Kind) {
     if (event.button !== 0) return;
     event.preventDefault();
     const pointer = toField(event);
     const id = nextId.current++;
     const control: Control = {
       id,
-      axis,
+      kind,
       x: pointer.x - 28,
       y: pointer.y - 22,
-      value: axis === 'horizontal' ? SPAWN_SIZE : SPAWN_LEAD,
+      value: spawnValue(kind),
     };
     commitControls([...controlsRef.current, control]);
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -304,28 +375,32 @@ export default function ShapeLab() {
       nx: control.x,
       ny: control.y,
       frame: 0,
+      samples: [],
+      caseWasOn: false,
     };
     setSelected(id);
     setDragging(true);
   }
 
-  function placeFromLibrary(axis: Axis) {
+  function placeFromLibrary(kind: Kind) {
     const bounds = fieldRefState.current;
     const size = surfaceSize(bounds.w, bounds.h);
     const ink = inkBounds(surfaceRef.current, size);
-    const box = CONTROL_BOX[axis];
-    const same = controlsRef.current.filter((item) => item.axis === axis).length;
+    const box = CONTROL_BOX[kind];
+    const same = controlsRef.current.filter((item) => item.kind === kind).length;
     const raw =
-      axis === 'horizontal'
+      kind === 'size'
         ? { x: ink.x + 28 + same * 36, y: ink.y - box.h - 78 }
-        : { x: ink.x + ink.w + 78, y: ink.y + 24 + same * 36 };
+        : kind === 'lead'
+          ? { x: ink.x + ink.w + 78, y: ink.y + 24 + same * 36 }
+          : { x: ink.x + 16 + (same % 3) * 40, y: ink.y + ink.h + 28 + Math.floor(same / 3) * 24 };
     const at = clampInside(raw.x, raw.y, box.w, box.h, bounds);
     const id = nextId.current++;
     const control: Control = {
       id,
-      axis,
+      kind,
       ...at,
-      value: axis === 'horizontal' ? SPAWN_SIZE : SPAWN_LEAD,
+      value: spawnValue(kind),
     };
     const next = [...controlsRef.current, control];
     commitControls(next);
@@ -350,7 +425,7 @@ export default function ShapeLab() {
     const id = selected as number;
     const current = controlsRef.current.find((item) => item.id === id);
     if (!current) return;
-    const box = CONTROL_BOX[current.axis];
+    const box = CONTROL_BOX[current.kind];
     const at = clampInside(current.x + dx, current.y + dy, box.w, box.h, bounds);
     const next = controlsRef.current.map((item) => (item.id === id ? { ...item, ...at } : item));
     commitControls(next);
@@ -380,7 +455,7 @@ export default function ShapeLab() {
       if (id === undefined) return;
       const current = controlsRef.current.find((item) => item.id === id);
       if (!current) return;
-      const box = CONTROL_BOX[current.axis];
+      const box = CONTROL_BOX[current.kind];
       const at = clampInside(current.x + arrow.x * step, current.y + arrow.y * step, box.w, box.h, bounds);
       commitControls(controlsRef.current.map((item) => (item.id === id ? { ...item, ...at } : item)));
       return;
@@ -427,10 +502,42 @@ export default function ShapeLab() {
     };
     commitControls([]);
     commitSurface(next);
+    setErased([]);
     setSelected('surface');
     announce('Controls cleared. The writing is still here, and the surface is back at the center.');
   }
 
+  const pageBox = pageRef.current?.getBoundingClientRect();
+  const fieldBox = fieldRef.current?.getBoundingClientRect();
+  const originX = pageBox && fieldBox ? pageBox.left - fieldBox.left : surface.x + 18;
+  const originY = pageBox && fieldBox ? pageBox.top - fieldBox.top : surface.y + 64;
+  const pageWidth = pageRef.current?.clientWidth || model.size.w - 36;
+  const spatial =
+    erased.length > 0 ||
+    model.metrics.some((item) => item.pull > 0.02 && (item.kind === 'gravity' || item.kind === 'contrast' || item.kind === 'wave' || item.kind === 'eraser'));
+  const styled = spatial
+    ? styleWords(
+        layoutWords(text, pageWidth, model.fontSize, model.lineHeight, model.weight, model.tracking),
+        originX,
+        originY,
+        model.fontSize * model.lineHeight,
+        model.metrics
+          .filter((item) => item.kind === 'gravity')
+          .map((item) => ({ x: item.box.x + item.box.w / 2, y: item.box.y + item.box.h / 2, pull: item.pull, value: item.value })),
+        model.metrics
+          .filter((item) => item.kind === 'contrast')
+          .map((item) => ({ x: item.box.x + item.box.w / 2, y: item.box.y + item.box.h / 2, pull: item.pull, value: item.value })),
+        model.metrics
+          .filter((item) => item.kind === 'wave')
+          .map((item) => ({ x: item.x, y: item.y, pull: item.pull, value: item.value })),
+        model.metrics
+          .filter((item) => item.kind === 'eraser')
+          .map((item) => ({ x: item.box.x + item.box.w / 2, y: item.box.y + item.box.h / 2, pull: item.pull, value: item.value })),
+        new Set(erased),
+      )
+    : [];
+  const caseTransform = model.caseMode === 1 ? 'uppercase' : model.caseMode === 2 || model.caseMode === 3 ? 'lowercase' : 'none';
+  const caseCaps = model.caseMode === 3 ? 'all-small-caps' : 'normal';
   const swell = model.maxPull * 18;
   const blob: Rect = {
     x: model.ink.x - swell,
@@ -462,27 +569,24 @@ export default function ShapeLab() {
           <p id="library-help" className="quiet">
             Drag onto the field, or focus one and press Enter to place it.
           </p>
-          {(['horizontal', 'vertical'] as Axis[]).map((axis) => (
+          {KINDS.map((kind) => (
             <button
-              key={axis}
+              key={kind}
               type="button"
               className="instrument"
               aria-describedby="library-help"
-              onPointerDown={(event) => beginLibraryDrag(event, axis)}
+              onPointerDown={(event) => beginLibraryDrag(event, kind)}
               onPointerMove={onPointerMove}
               onPointerUp={finishDrag}
               onPointerCancel={finishDrag}
               onKeyDown={(event) => {
                 if (event.key !== 'Enter' && event.key !== ' ') return;
                 event.preventDefault();
-                placeFromLibrary(axis);
+                placeFromLibrary(kind);
               }}
             >
-              <span className={axis === 'horizontal' ? 'glyph glyph-h' : 'glyph glyph-v'} aria-hidden="true">
-                <i />
-              </span>
-              <strong>{axis === 'horizontal' ? 'Font size' : 'Line spacing'}</strong>
-              <small>{axis === 'horizontal' ? 'Horizontal control' : 'Vertical control'}</small>
+              <strong>{KIND_LABEL[kind]}</strong>
+              <small>{KIND_HINT[kind]}</small>
             </button>
           ))}
           <div className="notes">
@@ -534,10 +638,11 @@ export default function ShapeLab() {
               <g filter="url(#mono-goo)" fill="#0c0c0c">
                 <rect x={blob.x} y={blob.y} width={blob.w} height={blob.h} rx={36 + swell * 0.4} />
                 {model.metrics.map((item) => {
-                  const scale = satelliteScale(item.pull);
+                  const bulk = inkBulk(item.kind, item.value);
+                  const scale = satelliteScale(item.pull) * (item.kind === 'weight' ? 0.65 + bulk * 0.4 : 1);
                   if (scale <= 0) return null;
                   const satellite = scaleAboutCenter(inflate(item.box, 8), scale);
-                  const thick = bridgeThickness(item.pull);
+                  const thick = bridgeThickness(item.pull, bulk);
                   const from = blobCenter;
                   const to = centerOf(item.box);
                   const dx = to.x - from.x;
@@ -572,7 +677,17 @@ export default function ShapeLab() {
             <section
               className="surface"
               data-selected={selected === 'surface' ? 'true' : 'false'}
-              style={{ left: surface.x, top: surface.y, width: model.size.w, height: model.size.h }}
+              style={{
+                left: surface.x,
+                top: surface.y,
+                width: model.size.w,
+                height: model.size.h,
+                ['--wght' as string]: model.weight,
+                ['--slnt' as string]: model.slant,
+                ['--track' as string]: `${model.tracking}em`,
+                ['--xform' as string]: caseTransform,
+                ['--caps' as string]: caseCaps,
+              }}
               onPointerDown={beginSurfaceDrag}
               onPointerMove={onPointerMove}
               onPointerUp={finishDrag}
@@ -594,13 +709,34 @@ export default function ShapeLab() {
                 </button>
                 <span className="surface-meta">{wordCount(text)} words</span>
               </div>
-              <textarea
-                aria-label="Writing"
-                spellCheck={false}
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                style={{ fontSize: model.fontSize, lineHeight: model.lineHeight }}
-              />
+              <div className="page" ref={pageRef}>
+                {spatial && (
+                  <div className="word-stage" aria-hidden="true" style={{ fontSize: model.fontSize, lineHeight: model.lineHeight }}>
+                    {styled.map((word) => (
+                      <span
+                        key={word.start}
+                        style={{
+                          left: word.x + word.dx,
+                          top: word.y + word.dy,
+                          opacity: word.opacity,
+                          color: word.color,
+                          transform: `rotate(${word.rotate}deg)`,
+                        }}
+                      >
+                        {word.text}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <textarea
+                  aria-label="Writing"
+                  spellCheck={false}
+                  className={spatial ? 'is-fx' : undefined}
+                  value={text}
+                  onChange={(event) => setText(event.target.value)}
+                  style={{ fontSize: model.fontSize, lineHeight: model.lineHeight }}
+                />
+              </div>
               <div className="surface-foot">
                 <span>Untitled</span>
                 <span>
@@ -625,6 +761,7 @@ export default function ShapeLab() {
                 onKeyUp={(event) => onHandleKeyUp(event, 'control', item.id)}
                 onValue={(value) => setControlValue(item.id, value)}
                 onRemove={() => removeControl(item.id)}
+                onRestore={() => setErased([])}
               />
               );
             })}
@@ -653,6 +790,10 @@ export default function ShapeLab() {
               <em>×</em>
             </div>
           </div>
+          <p className="quiet specimen-extra">
+            {Math.round(model.weight)} weight · {model.tracking.toFixed(2)} tracking · {model.slant.toFixed(0)} slant
+            {model.caseMode ? ` · ${caseName(model.caseMode)}` : ''}
+          </p>
 
           <p className="kicker">Pull</p>
           {model.metrics.length === 0 ? (
@@ -695,7 +836,7 @@ export default function ShapeLab() {
                   document.getElementById(`move-${item.id}`)?.focus();
                 }}
               >
-                {item.axis === 'horizontal' ? `Size ${item.id}` : `Spacing ${item.id}`}
+                {shortLabel(item.kind, item.id)}
               </button>
             ))}
           </div>
@@ -734,6 +875,10 @@ export default function ShapeLab() {
   );
 }
 
+function clampNum(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function ControlCard({
   item,
   selected,
@@ -746,6 +891,7 @@ function ControlCard({
   onKeyUp,
   onValue,
   onRemove,
+  onRestore,
 }: {
   item: Metric;
   selected: boolean;
@@ -758,14 +904,36 @@ function ControlCard({
   onKeyUp: (event: ReactKeyboardEvent) => void;
   onValue: (value: number) => void;
   onRemove: () => void;
+  onRestore: () => void;
 }) {
-  const horizontal = item.axis === 'horizontal';
   const name = controlTitle(item);
   const linked = item.pull >= LINK_AT;
+  const vertical = item.kind === 'lead';
+  function stopGesture(event: ReactPointerEvent) {
+    event.stopPropagation();
+  }
+  function dialAngle(weight: number) {
+    return -140 + ((weight - WEIGHT_MIN) / (WEIGHT_MAX - WEIGHT_MIN)) * 280;
+  }
+  function weightFromEvent(event: ReactPointerEvent<HTMLElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const degrees = Math.atan2(event.clientY - (rect.top + rect.height / 2), event.clientX - (rect.left + rect.width / 2)) * (180 / Math.PI);
+    const clamped = clampNum(degrees, -150, 150);
+    return Math.round(WEIGHT_MIN + ((clamped + 150) / 300) * (WEIGHT_MAX - WEIGHT_MIN));
+  }
+  function nudge(event: ReactKeyboardEvent, delta: number, min: number, max: number) {
+    if (!ARROWS[event.key] && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const sign = event.key === 'ArrowRight' || event.key === 'ArrowUp' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -1 : 0;
+    if (!sign) return;
+    onValue(clampNum(item.value + sign * delta, min, max));
+  }
   return (
     <article
       className="control"
-      data-axis={item.axis}
+      data-axis={vertical ? 'vertical' : 'horizontal'}
+      data-kind={item.kind}
       data-linked={linked ? 'true' : 'false'}
       data-selected={selected ? 'true' : 'false'}
       aria-label={name}
@@ -779,7 +947,7 @@ function ControlCard({
       onPointerDown={(event) => {
         onSelect();
         const target = event.target as HTMLElement;
-        if (target.closest('input, .remove')) return;
+        if (target.closest('input, .remove, .gesture, .cycle, .restore')) return;
         onDragStart(event);
       }}
       onPointerMove={onPointerMove}
@@ -798,7 +966,7 @@ function ControlCard({
           onKeyUp={onKeyUp}
           onFocus={onSelect}
         >
-          <span className="kicker">{horizontal ? 'Font size' : 'Spacing'}</span>
+          <span className="kicker">{KIND_LABEL[item.kind]}</span>
           <span className="handle-meta">
             <span className="index">{String(item.id).padStart(2, '0')}</span>
             <span className="move-word">Move</span>
@@ -814,23 +982,153 @@ function ControlCard({
           ×
         </button>
       </div>
-      <label className="slider">
-        <span className="readout">
-          {horizontal ? formatSize(item.value) : formatLead(item.value)}
-          <small>{horizontal ? 'px' : '×'}</small>
-        </span>
-        <input
-          type="range"
-          min={horizontal ? SIZE_MIN : LEAD_MIN}
-          max={horizontal ? SIZE_MAX : LEAD_MAX}
-          step={horizontal ? SIZE_STEP : LEAD_STEP}
-          value={item.value}
-          aria-label={name}
-          aria-orientation={horizontal ? 'horizontal' : 'vertical'}
-          onChange={(event) => onValue(Number(event.target.value))}
-          onPointerDown={(event) => event.stopPropagation()}
-        />
-      </label>
+      {item.kind === 'size' || item.kind === 'lead' ? (
+        <label className="slider">
+          <span className="readout">
+            {item.kind === 'size' ? formatSize(item.value) : formatLead(item.value)}
+            <small>{item.kind === 'size' ? 'px' : '×'}</small>
+          </span>
+          <input
+            type="range"
+            min={item.kind === 'size' ? SIZE_MIN : LEAD_MIN}
+            max={item.kind === 'size' ? SIZE_MAX : LEAD_MAX}
+            step={item.kind === 'size' ? SIZE_STEP : LEAD_STEP}
+            value={item.value}
+            aria-label={name}
+            aria-orientation={vertical ? 'vertical' : 'horizontal'}
+            onChange={(event) => onValue(Number(event.target.value))}
+            onPointerDown={(event) => event.stopPropagation()}
+          />
+        </label>
+      ) : null}
+      {item.kind === 'weight' ? (
+        <div className="dial-row">
+          <button
+            type="button"
+            className="gesture dial"
+            role="slider"
+            aria-valuemin={WEIGHT_MIN}
+            aria-valuemax={WEIGHT_MAX}
+            aria-valuenow={Math.round(item.value)}
+            aria-label={`${name} dial`}
+            onPointerDown={(event) => {
+              stopGesture(event);
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              onValue(weightFromEvent(event));
+            }}
+            onPointerMove={(event) => {
+              if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+              onValue(weightFromEvent(event));
+            }}
+            onKeyDown={(event) => nudge(event, 40, WEIGHT_MIN, WEIGHT_MAX)}
+          >
+            <i style={{ transform: `rotate(${dialAngle(item.value)}deg)` }} />
+          </button>
+          <span className="readout">{Math.round(item.value)}</span>
+        </div>
+      ) : null}
+      {item.kind === 'tracking' ? (
+        <div className="pinch">
+          <span className="pinch-line" style={{ width: 12 + ((item.value - TRACK_MIN) / (TRACK_MAX - TRACK_MIN)) * 78 }} />
+          <span className="dot" />
+          <button
+            type="button"
+            className="gesture dot dot-live"
+            role="slider"
+            aria-valuemin={TRACK_MIN}
+            aria-valuemax={TRACK_MAX}
+            aria-valuenow={Number(item.value.toFixed(2))}
+            aria-label={`${name} pinch`}
+            style={{ left: 28 + ((item.value - TRACK_MIN) / (TRACK_MAX - TRACK_MIN)) * 78 }}
+            onPointerDown={(event) => {
+              stopGesture(event);
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+              const rect = event.currentTarget.parentElement!.getBoundingClientRect();
+              const local = clampNum(event.clientX - rect.left - 28, 0, 78);
+              onValue(TRACK_MIN + (local / 78) * (TRACK_MAX - TRACK_MIN));
+            }}
+            onKeyDown={(event) => nudge(event, 0.02, TRACK_MIN, TRACK_MAX)}
+          />
+          <span className="readout">{item.value.toFixed(2)}</span>
+        </div>
+      ) : null}
+      {item.kind === 'slant' ? (
+        <button
+          type="button"
+          className="gesture lever"
+          role="slider"
+          aria-valuemin={SLANT_MIN}
+          aria-valuemax={SLANT_MAX}
+          aria-valuenow={Math.round(item.value)}
+          aria-label={`${name} lever`}
+          onPointerDown={(event) => {
+            stopGesture(event);
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+            const rect = event.currentTarget.getBoundingClientRect();
+            const degrees = Math.atan2(event.clientX - (rect.left + rect.width / 2), rect.bottom - event.clientY) * (180 / Math.PI);
+            onValue(clampNum(-degrees / 4, SLANT_MIN, SLANT_MAX));
+          }}
+          onKeyDown={(event) => nudge(event, 1, SLANT_MIN, SLANT_MAX)}
+        >
+          <i style={{ transform: `rotate(${item.value * -4}deg)` }} />
+          <span>{item.value.toFixed(0)}°</span>
+        </button>
+      ) : null}
+      {item.kind === 'gravity' ? <div className="blob-mark" aria-hidden="true" /> : null}
+      {item.kind === 'contrast' ? <div className="puck-mark" aria-hidden="true" /> : null}
+      {item.kind === 'case' ? (
+        <button
+          type="button"
+          className="cycle"
+          onPointerDown={stopGesture}
+          onClick={() => onValue(item.value >= 3 ? 1 : item.value + 1)}
+        >
+          {caseName(item.value)}
+        </button>
+      ) : null}
+      {item.kind === 'wave' ? (
+        <div className="wave">
+          <svg viewBox="0 0 160 36" aria-hidden="true">
+            <path d={`M4 28 Q 80 ${28 - item.value * 1.6} 156 28`} />
+          </svg>
+          <button
+            type="button"
+            className="gesture wave-handle"
+            role="slider"
+            aria-valuemin={0}
+            aria-valuemax={16}
+            aria-valuenow={Math.round(item.value)}
+            aria-label={`${name} string`}
+            style={{ top: 22 - item.value * 1.15 }}
+            onPointerDown={(event) => {
+              stopGesture(event);
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+              const rect = event.currentTarget.parentElement!.getBoundingClientRect();
+              const lift = clampNum(rect.bottom - 8 - event.clientY, 0, 28);
+              onValue(lift / 1.7);
+            }}
+            onKeyDown={(event) => nudge(event, 2, 0, 16)}
+          />
+        </div>
+      ) : null}
+      {item.kind === 'eraser' ? (
+        <button type="button" className="restore" onPointerDown={stopGesture} onClick={onRestore}>
+          Restore
+        </button>
+      ) : null}
       <div className="meter">
         <span className="meter-label">Pull</span>
         <span className="meter-track" aria-hidden="true">
