@@ -1,0 +1,25 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: #0c0c0c;
+  background: #f3f3f1;
+  color-scheme: light;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: #0c0c0c;
+  color: #f7f7f5;
+}
