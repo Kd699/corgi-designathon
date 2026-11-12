@@ -42,7 +42,6 @@ import {
   inkBounds,
   inkBulk,
   pullFromGap,
-  satelliteScale,
   scaleAboutCenter,
   shortLabel,
   spawnValue,
@@ -116,22 +115,6 @@ function derive(surface: { x: number; y: number }, controls: Control[], field: F
   return { size, ink, metrics, fontSize, lineHeight, weight, tracking, slant, caseMode, maxPull };
 }
 
-function reading(fontSize: number, lineHeight: number, metrics: Metric[]): string {
-  const sizes = metrics.filter((item) => item.kind === 'size' && item.pull > 0.004);
-  const leads = metrics.filter((item) => item.kind === 'lead' && item.pull > 0.004);
-  const sizeClause = sizes.length
-    ? `Font size ${formatSize(fontSize)}px, from ${sizes
-        .map((item) => `${controlTitle(item)} at ${Math.round(item.pull * 100)}%`)
-        .join(' and ')}.`
-    : `Font size ${formatSize(fontSize)}px, at rest.`;
-  const leadClause = leads.length
-    ? `Line spacing ${formatLead(lineHeight)}, from ${leads
-        .map((item) => `${controlTitle(item)} at ${Math.round(item.pull * 100)}%`)
-        .join(' and ')}.`
-    : `Line spacing ${formatLead(lineHeight)}, at rest.`;
-  return `${sizeClause} ${leadClause}`;
-}
-
 function wordCount(text: string): number {
   const trimmed = text.trim();
   return trimmed ? trimmed.split(/\s+/).length : 0;
@@ -186,7 +169,6 @@ export default function ShapeLab() {
   }, []);
 
   const model = derive(surface, controls, field);
-  const sentence = reading(model.fontSize, model.lineHeight, model.metrics);
   const selectedControl = typeof selected === 'number' ? controls.find((item) => item.id === selected) : undefined;
 
   function announce(message: string) {
@@ -552,17 +534,6 @@ export default function ShapeLab() {
       <a className="skip" href="#field">
         Skip to field
       </a>
-      <header className="mast">
-        <div>
-          <p className="kicker">Shape Lab</p>
-          <h1>Mono</h1>
-        </div>
-        <p className="mast-note">Black and white. Nothing is saved.</p>
-        <button type="button" className="text-button" onClick={resetField}>
-          Reset field
-        </button>
-      </header>
-
       <div className="workspace">
         <aside className="library" aria-label="Control library">
           <p className="kicker">Instruments</p>
@@ -596,18 +567,13 @@ export default function ShapeLab() {
             <p>
               <b>Type.</b> The ink reaches as a control comes close and separates as it leaves. Pull is that control’s share of the type.
             </p>
+            <button type="button" className="text-button" onClick={resetField}>
+              Reset field
+            </button>
           </div>
         </aside>
 
         <section className="stage-column" aria-label="Canvas">
-          <div className="toolbar">
-            <span>Field</span>
-            <span>
-              {controls.length === 0 ? 'No controls yet' : `${controls.length} free`}
-              {' · '}
-              {formatSize(model.fontSize)}px · {formatLead(model.lineHeight)}
-            </span>
-          </div>
           <div
             className="field"
             id="field"
@@ -639,9 +605,8 @@ export default function ShapeLab() {
                 <rect x={blob.x} y={blob.y} width={blob.w} height={blob.h} rx={36 + swell * 0.4} />
                 {model.metrics.map((item) => {
                   const bulk = inkBulk(item.kind, item.value);
-                  const scale = satelliteScale(item.pull) * (item.kind === 'weight' ? 0.65 + bulk * 0.4 : 1);
-                  if (scale <= 0) return null;
-                  const satellite = scaleAboutCenter(inflate(item.box, 8), scale);
+                  const cover = item.kind === 'weight' ? 1 + Math.max(0, bulk - 0.4) * 0.22 : 1;
+                  const satellite = scaleAboutCenter(inflate(item.box, 16), cover);
                   const thick = bridgeThickness(item.pull, bulk);
                   const from = blobCenter;
                   const to = centerOf(item.box);
@@ -768,9 +733,6 @@ export default function ShapeLab() {
 
             {controls.length === 0 && <p className="field-hint">Drag an instrument close. The ink will reach.</p>}
           </div>
-          <p className="status" aria-hidden="true">
-            {sentence}
-          </p>
           <p className="sr" role="status">
             {notice}
           </p>

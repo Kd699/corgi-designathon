@@ -26,7 +26,7 @@ The field starts with only the text surface, set in a resting face (21px, 1.50 l
 
 **Move it.** Drag the card itself. The slider is the only part of the card that does not move it. The control follows the pointer and stays at the coordinates where you release it. There are no edges to dock to and no grid to snap to. The text surface can be dragged by anything except the writing. If a release would leave an object hanging off the field, it is kept fully inside so it cannot be lost. A release in the interior is not adjusted.
 
-**Watch the ink.** Each control has a reach of about 156 pixels, measured as the gap between its card and the ink. Inside that reach, pull rises on a smooth curve from 0 to 1. The surface draws a soft bridge and a satellite blob; an SVG blur-and-threshold filter welds them into one body. Past a pull of about 58%, the card gives up its paper fill and sits in the ink. Farther away, the bridge thins and disappears.
+**Watch the ink.** A control is a black body as soon as it leaves the library. Each one has a reach of about 156 pixels, measured as the gap between it and the surface. Inside that reach, pull rises on a smooth curve from 0 to 1, and a soft bridge welds the two black bodies together. Farther away, the bridge thins and disappears. The labels stay light on the black body.
 
 **Read the type.** Font size listens only to horizontal controls. Line spacing listens only to vertical ones. Weight, tracking, and slant listen to their own instruments the same way: until nearby pull adds up to full strength, the resting face keeps the remaining share. The writing face is Roboto Flex, so weight and slant move smoothly.
 
