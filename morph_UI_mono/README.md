@@ -14,7 +14,9 @@ npm ci
 npm run dev
 ```
 
-Open http://localhost:5480.
+Open http://localhost:5480. A small Layout link opens `#/editor`, a second page for moving and resizing the pieces inside each gadget and each main body. Those edits are stored in this browser and used when you return to the demo. The body switch on the canvas changes the black surface between text, a button, a card, an image, a music player, a form, and a chart. Nearby gadgets still reach it.
+
+`npm run build` writes `dist/`.
 
 `npm run build` typechecks and writes `dist/`. The Vite `base` is `/`, so the build is meant to be hosted at a domain root. `npm run preview` serves that build on port 5481.
 

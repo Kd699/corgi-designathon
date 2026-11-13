@@ -1,10 +1,10 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import ShapeLab from './ShapeLab';
+import App from './App';
 import './base.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ShapeLab />
+    <App />
   </StrictMode>,
 );
